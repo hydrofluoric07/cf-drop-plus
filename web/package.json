@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@aaroon/workbox-rspack-plugin": "^0.3.2",
-    "@iconify-json/mdi": "^1.2.2",
+    "@iconify-json/lucide": "^1.2.102",
     "@rsbuild/core": "^1.1.8",
     "@rsbuild/plugin-react": "^1.0.7",
     "@rsbuild/plugin-sass": "^1.1.2",

@@ -208,13 +208,6 @@ app.post("/api/upload", timingMiddleware, authWithPassword, async (c) => {
   }
 });
 
-app.get("/api/download/:slug/message", async (c) => {
-  const slug = c.req.param("slug");
-  const record = await getUploadRecordBySlug(c.env.DB, slug);
-  if (!record) return c.status(404);
-  return c.text(record.message);
-})
-
 app.get("/api/download/:slug/tarball", async (c) => {
   const slug = c.req.param("slug");
   const record = await getUploadRecordBySlug(c.env.DB, slug);

@@ -9,9 +9,7 @@ import { PopoverConfirm } from './PopoverConfirm';
 
 dayjs.extend(relativeTime);
 
-interface Props { }
-
-export const UploadRecords = memo<Props>((props) => {
+export const UploadRecords = memo(() => {
   // all records. newest first
   const { data, error, isLoading, isValidating, mutate, size, setSize } = useSWRInfinite(
     (_, page?: UploadRecord[]) => (page ? String(page?.at(-1)?.id ?? '') : 'init'),
@@ -28,17 +26,20 @@ export const UploadRecords = memo<Props>((props) => {
   }, [mutate]);
 
   return (
-    <div>
-      {error && <div className="text-red-500 mb-4">Error: {error.message}</div>}
+    <div className="records-list">
+      {error && <div className="records-error">Error: {error.message}</div>}
+      {!error && !isLoading && (!data || !data.some((it) => it.length)) && (
+        <div className="records-empty">No uploads yet. Paste text or add files above to create your first entry.</div>
+      )}
       {data?.map((page, i) => (
-        <div key={i}>
+        <div key={i} className="records-page">
           {page.map((record) => (
             <UploadRecordItem key={record.id} record={record} />
           ))}
         </div>
       ))}
-      <button onClick={() => setSize(size + 1)} disabled={isValidating} className="w-full max-w-md mx-auto my-8 block">
-        {isValidating && <i className="i-mdi-loading animate-spin mr-2"></i>}
+      <button onClick={() => setSize(size + 1)} disabled={isValidating} className="records-more">
+        {isValidating && <i className="i-lucide-loader-circle animate-spin"></i>}
         Load more
       </button>
     </div>
@@ -48,41 +49,30 @@ export const UploadRecords = memo<Props>((props) => {
 const UploadRecordItem = memo((props: { record: UploadRecord }) => {
   const files = useMemo(() => props.record.files || [], [props.record.files]);
 
-  const actionLink = 'cursor-pointer p-2 m--2 text-inherit decoration-none hover:text-brand-6 hover:bg-brand-1 rounded-lg';
+  const actionLink = 'record-action';
 
-  const meta = <div className="flex gap-2 mb-2 text-xs text-gray">
+  const meta = <div className="record-meta">
     <span>
-      <i className="i-mdi-user mr-1"></i>
+      <i className="i-lucide-user mr-1"></i>
       {props.record.uploader}
     </span>
     <span title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
-      <i className="i-mdi-clock mr-1"></i>
+      <i className="i-lucide-clock mr-1"></i>
       {dayjs(props.record.ctime).fromNow()}
     </span>
     {!!props.record.size && (
       <span title={`${props.record.size} bytes`}>
-        <i className="i-mdi-database mr-1"></i>
+        <i className="i-lucide-database mr-1"></i>
         {toReadableSize(props.record.size)}
       </span>
     )}
-  </div>
+  </div>;
 
-  const actions = <div className="flex gap-4 p-2 b-t b-t-gray-2 b-t-solid justify-end text-gray-7 text-sm leading-none">
+  const actions = <div className="record-actions">
     {!!props.record.message && (<>
       <a className={actionLink} onClick={(e) => (e.preventDefault(), copyToClipboard(props.record.message))} href='#' role='button'>
-        <i className="i-mdi-clipboard mr-1"></i>
+        <i className="i-lucide-copy record-action-icon"></i>
         Copy Text
-      </a>
-
-      <a
-        className={actionLink}
-        target="_blank"
-        rel="noreferrer"
-        href={`/api/download/${encodeURIComponent(props.record.slug)}/message`}
-        download={`${props.record.id}.txt`}
-      >
-        <i className="i-mdi-file-outline mr-1"></i>
-        Text File
       </a>
     </>)}
 
@@ -95,7 +85,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
           href={`/api/download/${encodeURIComponent(props.record.slug)}/tarball`}
           download={`${props.record.id}.tar`}
         >
-          <i className="i-mdi-archive-outline mr-1"></i>
+          <i className="i-lucide-archive record-action-icon"></i>
           Download All
         </a>
       )
@@ -103,45 +93,45 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
 
     <PopoverConfirm onConfirm={() => deleteRecord(props.record.id)}>
       <a
-        className={`${actionLink} hover:text-red`}
+        className={`${actionLink} record-action-danger`}
         onClick={(e) => e.preventDefault()} href='#' role='button'>
-        <i className="i-mdi-trash mr-1"></i>
+        <i className="i-lucide-trash-2 record-action-icon"></i>
         Delete
       </a>
     </PopoverConfirm>
-  </div>
+  </div>;
 
   return (
-    <div className="rounded-lg bg-white shadow mb-2">
-      <div className='max-h-sm withScrollbar'>
+    <article className="record-card">
+      <div className="record-main withScrollbar">
         {meta}
-        {!!props.record.message && <pre className="ws-pre-wrap m-0 mb-2 text-sm">{props.record.message}</pre>}
+        {!!props.record.message && <pre className="record-message">{props.record.message}</pre>}
         {files.length > 0 && (
-          <div className="flex flex-wrap ml--2 mb--2">
+          <div className="record-files">
             {files.map((file, index) => {
               const link = `/api/download/${props.record.slug}/${index}`;
               return (
-                <div key={file.path} className="flex gap-2 max-w-sm min-w-0">
+                <div key={file.path}>
                   <a
                     href={link}
                     target="_blank"
                     rel="noreferrer"
                     title={file.name}
-                    className="flex gap-2 items-center decoration-none text-brand-6 hover:bg-brand-1 rounded p-2 min-w-0"
+                    className="record-file"
                   >
                     {file.thumbnail ? (
                       <>
-                        <img src={file.thumbnail} className="w-16 h-16 rounded-md mr-1" />
-                        <div className="flex flex-col gap-1 min-w-0">
-                          <span className="min-w-0 truncate">{file.name}</span>
-                          <span className="text-sm text-gray">{toReadableSize(file.size)}</span>
+                        <img src={file.thumbnail} className="record-file-thumb" />
+                        <div className="min-w-0">
+                          <div className="record-file-name">{file.name}</div>
+                          <div className="record-file-size">{toReadableSize(file.size)}</div>
                         </div>
                       </>
                     ) : (
                       <>
-                        <i className="i-mdi-file-outline"></i>
-                        <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                        <span className="text-sm text-gray">{toReadableSize(file.size)}</span>
+                        <i className="i-lucide-file text-[18px]"></i>
+                        <span className="record-file-name">{file.name}</span>
+                        <span className="record-file-size">{toReadableSize(file.size)}</span>
                       </>
                     )}
                   </a>
@@ -153,7 +143,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
       </div>
 
       {actions}
-    </div>
+    </article>
   );
 });
 

@@ -1,5 +1,6 @@
 # prod
 dist/
+node_modules/
 
 # dev
 .yarn/

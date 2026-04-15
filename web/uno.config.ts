@@ -2,7 +2,7 @@ import { presetIcons } from '@unocss/preset-icons';
 import { presetUno } from '@unocss/preset-uno';
 import type { UserConfig } from '@unocss/core';
 import chroma from 'chroma-js';
-import MDIIcons from '@iconify-json/mdi/icons.json' assert { type: 'json' };
+import LucideIcons from '@iconify-json/lucide/icons.json' assert { type: 'json' };
 
 import manifest from './public/manifest.json';
 
@@ -41,7 +41,7 @@ const unoConfig: UserConfig = {
         // ...
       },
       collections: {
-        mdi: () => MDIIcons,
+        lucide: () => LucideIcons,
       },
     }),
   ],

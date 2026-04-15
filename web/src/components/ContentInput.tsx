@@ -130,49 +130,57 @@ export const ContentInput = memo(() => {
   return (
     <div
       tabIndex={-1}
-      className="outline-0 max-h-[30vh] withScrollbar"
+      className="composer"
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
           handleSend();
         }
       }}
     >
-      <div className="flex mb-4 rounded-md shadow overflow-hidden outline-1 outline-solid outline-transparent focus-within:outline-brand-6 focus-within:ring focus-within:ring-brand-3">
+      <div className="composer-input-row">
         <textarea
           ref={textAreaRef}
           value={text}
           onChange={handleTextChange}
-          className="w-full p-2 border-0 resize-y flex-1 outline-0 h-20 min-h-10 text-sm"
+          className="composer-textarea"
           placeholder="Type or paste text / files here..."
         />
-
-        <button className="w-20 rounded-none" onClick={handleSend} disabled={!text && !files.length}>
-          <i className="i-mdi-send"></i>
-        </button>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        <button onClick={openFilePicker} key='addFileBtn'>
-          <i className="i-mdi-file-plus"></i>
-          Add file
-        </button>
+      <div className="composer-toolbar">
+        <div className="composer-toolbar-left">
+          <button className="btn btn-ghost composer-tool-btn" onClick={openFilePicker} key="addFileBtn">
+            <i className="i-lucide-folder-plus"></i>
+            Add file
+          </button>
 
-        <button onClick={doClear} className='btn-gray' key='clearBtn'>
-          Clear
-        </button>
+          <button onClick={doClear} className="btn btn-ghost composer-tool-btn" key="clearBtn">
+            <i className="i-lucide-eraser"></i>
+            Clear
+          </button>
+        </div>
 
+        <div className="composer-toolbar-right">
+          <button className="btn btn-primary composer-send composer-tool-btn" onClick={handleSend} disabled={!text && !files.length}>
+            <i className="i-lucide-send"></i>
+            <span>Send</span>
+          </button>
+        </div>
+      </div>
+
+      {!!files.length && <div className="composer-files">
         {files.map((file) => <AttachedFileItem
           key={file.id}
           file={file}
           removeFile={handleRemoveFile}
         />)}
-      </div>
+      </div>}
 
       {!!isDragOver && (
-        <div className="fixed inset-0 bg-gray-3 opacity-50 flex items-center justify-center pointer-events-none">
-          <div className="animate-slide-in-up animate-duration-200 text-center">
-            <i className="i-mdi-upload text-[64px]"></i>
-            <div className="text-center text-2xl">Drop files to add</div>
+        <div className="drop-mask">
+          <div className="drop-mask-card animate-slide-in-up animate-duration-200">
+            <i className="i-lucide-upload text-[42px]" />
+            <div>Drop files to add</div>
           </div>
         </div>
       )}
@@ -194,22 +202,22 @@ function AttachedFileItem({ file, removeFile }: { file: FileStoreItem; removeFil
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  return <div className="btn !p-0 cursor-default">
+  return <div className="file-pill">
     {file.thumbnail ? (
-      <img src={file.thumbnail} className="w-[2em] h-[2em] rounded-md mx-1" />
+      <img src={file.thumbnail} className="file-pill-thumb" />
     ) : (
-      <div className="pl-3" />
+      <i className="i-lucide-file text-[18px] text-gray" />
     )}
     <a
       download={file.name}
       href={url}
       title={file.name}
-      className="truncate max-w-48 text-inherit decoration-none hover:decoration-underline">{file.name}</a>
+      className="file-pill-link">{file.name}</a>
     <button
       onClick={() => removeFile(file.id)}
-      className="text-white hover:bg-red-400 transition-colors border-0 bg-transparent flex items-center self-stretch px-3"
+      className="file-pill-remove"
     >
-      <i className="i-mdi-close"></i>
+      <i className="i-lucide-x"></i>
     </button>
   </div>;
 }
