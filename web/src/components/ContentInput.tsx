@@ -6,10 +6,12 @@ import { FileStoreItem } from '../database/files';
 import { addFiles, clearFiles, inputFilesAtom, inputTextAtom, removeFile } from '../store/input';
 import { useAtom } from 'jotai';
 import { startUpload } from '../store/uploading';
+import { useT } from '../store/locale';
 
 export const ContentInput = memo(() => {
   const [files] = useAtom(inputFilesAtom)
   const [text, setText] = useAtom(inputTextAtom);
+  const t = useT();
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   const [isDragOver, setIsDragOver] = useState(false);
@@ -143,7 +145,7 @@ export const ContentInput = memo(() => {
           value={text}
           onChange={handleTextChange}
           className="composer-textarea"
-          placeholder="Type or paste text / files here..."
+          placeholder={t('composer.placeholder')}
         />
       </div>
 
@@ -151,19 +153,19 @@ export const ContentInput = memo(() => {
         <div className="composer-toolbar-left">
           <button className="btn btn-ghost composer-tool-btn" onClick={openFilePicker} key="addFileBtn">
             <i className="i-lucide-folder-plus"></i>
-            Add file
+            {t('composer.addFile')}
           </button>
 
           <button onClick={doClear} className="btn btn-ghost composer-tool-btn" key="clearBtn">
             <i className="i-lucide-eraser"></i>
-            Clear
+            {t('composer.clear')}
           </button>
         </div>
 
         <div className="composer-toolbar-right">
           <button className="btn btn-primary composer-send composer-tool-btn" onClick={handleSend} disabled={!text && !files.length}>
             <i className="i-lucide-send"></i>
-            <span>Send</span>
+            <span>{t('composer.send')}</span>
           </button>
         </div>
       </div>
@@ -180,7 +182,7 @@ export const ContentInput = memo(() => {
         <div className="drop-mask">
           <div className="drop-mask-card animate-slide-in-up animate-duration-200">
             <i className="i-lucide-upload text-[42px]" />
-            <div>Drop files to add</div>
+            <div>{t('composer.dropFiles')}</div>
           </div>
         </div>
       )}

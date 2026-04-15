@@ -14,7 +14,7 @@ export function startUpload() {
   const text = store.get(inputTextAtom);
   const files = store.get(inputFilesAtom);
   if (!text && !files.length) {
-    store.set(uploadingErrorAtom, 'No files or text');
+    store.set(uploadingErrorAtom, 'error.noContent');
     return; // nothing to upload
   }
 
@@ -40,7 +40,10 @@ function handleUploadEnd(error?: any) {
   window.dispatchEvent(new Event('records-updated'));
   if (error) {
     console.error(error);
-    store.set(uploadingErrorAtom, String(error));
+    const message = error instanceof Error
+      ? error.message
+      : String(error || 'error.unknown');
+    store.set(uploadingErrorAtom, message || 'error.unknown');
   } else {
     store.set(inputTextAtom, '');
     clearFiles();

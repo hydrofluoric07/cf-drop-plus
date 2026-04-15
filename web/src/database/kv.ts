@@ -5,6 +5,7 @@ import { connect, TableName } from "./connect";
 const KvDefaults = {
   password: '',
   inputText: '',
+  locale: '',
 }
 
 export type KvKey = keyof typeof KvDefaults;

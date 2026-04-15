@@ -27,7 +27,7 @@ export async function fetchAPI(input: RequestInfo | URL, init?: RequestInit) {
   const res = await fetch(input, init);
   if (res.status === 401) {
     store.set(passwordInvalidAtom, true);
-    throw new Error('Password required');
+    throw new Error('error.passwordRequired');
   }
 
   store.set(passwordInvalidAtom, false);

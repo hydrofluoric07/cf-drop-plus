@@ -64,12 +64,12 @@ export async function invokeUploadAPI(opts: {
         return;
       }
 
-      reject(new Error('Upload failed'));
+      reject(new Error('error.uploadFailed'));
     };
 
     xhr.onerror = (e) => {
       console.error('upload error', e);
-      reject(new Error('Upload failed'));
+      reject(new Error('error.uploadFailed'));
     };
 
     xhr.send(body);

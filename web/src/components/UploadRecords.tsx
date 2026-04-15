@@ -2,20 +2,30 @@ import { memo, useEffect, useMemo } from 'react';
 import useSWRInfinite from 'swr/infinite';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/zh-cn';
 
 import type { UploadRecord } from '../../../src/database';
 import { fetchAPI } from '../store/auth';
 import { PopoverConfirm } from './PopoverConfirm';
+import { useLocale, useT } from '../store/locale';
+import { tError } from '../i18n';
 
 dayjs.extend(relativeTime);
 
 export const UploadRecords = memo(() => {
+  const [locale] = useLocale();
+  const t = useT();
+
   // all records. newest first
   const { data, error, isLoading, isValidating, mutate, size, setSize } = useSWRInfinite(
     (_, page?: UploadRecord[]) => (page ? String(page?.at(-1)?.id ?? '') : 'init'),
     (beforeId) =>
       fetchAPI('/api/list?beforeId=' + beforeId).then((res) => res.json() as Promise<UploadRecord[]>),
   );
+
+  useEffect(() => {
+    dayjs.locale(locale === 'zh-CN' ? 'zh-cn' : 'en');
+  }, [locale]);
 
   useEffect(() => {
     const refresh = () => {
@@ -27,9 +37,13 @@ export const UploadRecords = memo(() => {
 
   return (
     <div className="records-list">
-      {error && <div className="records-error">Error: {error.message}</div>}
+      {error && (
+        <div className="records-error">
+          {t('common.errorWithMessage', { message: tError(locale, error.message) })}
+        </div>
+      )}
       {!error && !isLoading && (!data || !data.some((it) => it.length)) && (
-        <div className="records-empty">No uploads yet. Paste text or add files above to create your first entry.</div>
+        <div className="records-empty">{t('records.empty')}</div>
       )}
       {data?.map((page, i) => (
         <div key={i} className="records-page">
@@ -40,13 +54,14 @@ export const UploadRecords = memo(() => {
       ))}
       <button onClick={() => setSize(size + 1)} disabled={isValidating} className="records-more">
         {isValidating && <i className="i-lucide-loader-circle animate-spin"></i>}
-        Load more
+        {t('records.loadMore')}
       </button>
     </div>
   );
 });
 
 const UploadRecordItem = memo((props: { record: UploadRecord }) => {
+  const t = useT();
   const files = useMemo(() => props.record.files || [], [props.record.files]);
 
   const actionLink = 'record-action';
@@ -72,7 +87,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
     {!!props.record.message && (<>
       <a className={actionLink} onClick={(e) => (e.preventDefault(), copyToClipboard(props.record.message))} href='#' role='button'>
         <i className="i-lucide-copy record-action-icon"></i>
-        Copy Text
+        {t('records.copyText')}
       </a>
     </>)}
 
@@ -86,7 +101,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
           download={`${props.record.id}.tar`}
         >
           <i className="i-lucide-archive record-action-icon"></i>
-          Download All
+          {t('records.downloadAll')}
         </a>
       )
     }
@@ -96,7 +111,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
         className={`${actionLink} record-action-danger`}
         onClick={(e) => e.preventDefault()} href='#' role='button'>
         <i className="i-lucide-trash-2 record-action-icon"></i>
-        Delete
+        {t('records.delete')}
       </a>
     </PopoverConfirm>
   </div>;

@@ -4,10 +4,17 @@ import { UploadRecords } from './components/UploadRecords';
 import { PasswordInput } from './components/PasswordInput';
 import { useAtom } from 'jotai';
 import { uploadingErrorAtom, uploadingProgressAtom } from './store/uploading';
+import { useLocale, useT } from './store/locale';
+import { localeOptions, tError } from './i18n';
+import { useEffect, useId, useRef, useState } from 'react';
 
 const App = () => {
   return (
     <div className="app-root">
+      <div className="app-topbar">
+        <LanguageSwitcher />
+      </div>
+
       <main className="app-shell">
         <section className="workspace-panel">
           <SimpleProgressBar />
@@ -29,13 +36,96 @@ const App = () => {
   );
 };
 
+function LanguageSwitcher() {
+  const [locale, setLocale] = useLocale();
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxId = useId();
+  const current = localeOptions.find((item) => item.code === locale) ?? localeOptions[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!wrapperRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="locale-picker" ref={wrapperRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`locale-trigger ${open ? 'is-open' : ''}`}
+        aria-label={t('language.switchAria')}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <i className="i-lucide-languages locale-trigger-icon" />
+        <span className="locale-trigger-text">{current.label}</span>
+        <i className="i-lucide-chevron-down locale-trigger-arrow" />
+      </button>
+
+      {open && (
+        <div id={listboxId} role="listbox" className="locale-menu">
+          {localeOptions.map((item) => (
+            <button
+              key={item.code}
+              type="button"
+              role="option"
+              className={`locale-option ${item.code === locale ? 'is-active' : ''}`}
+              aria-selected={item.code === locale}
+              onClick={() => {
+                setLocale(item.code);
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+            >
+              <span className="locale-option-label">{item.label}</span>
+              {item.code === locale && <i className="i-lucide-check locale-option-check" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SimpleProgressBar() {
+  const [locale] = useLocale();
+  const t = useT();
   const [progress] = useAtom(uploadingProgressAtom);
   const [error] = useAtom(uploadingErrorAtom);
+  const translatedError = error ? tError(locale, error) : '';
 
   return (
     <div className="progress-wrap">
-      {!!error && <div className="status-error">{error}</div>}
+      {!!error && (
+        <div className="status-error">
+          {t('common.errorWithMessage', { message: translatedError })}
+        </div>
+      )}
       <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}>
         <div className="progress-value" style={{ width: `${progress}%` }} />
       </div>

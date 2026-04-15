@@ -1,0 +1,189 @@
+export const supportedLocales = ['zh-CN', 'en'] as const;
+export type Locale = (typeof supportedLocales)[number];
+export interface LocaleMeta {
+  code: Locale;
+  label: string;
+}
+export const localeOptions: readonly LocaleMeta[] = [
+  { code: 'zh-CN', label: '简体中文' },
+  { code: 'en', label: 'English' },
+] as const;
+
+export const defaultLocale: Locale = 'zh-CN';
+
+const zhCN = {
+  'language.switchAria': '语言切换',
+  'language.zhCN': '中文',
+  'language.en': 'EN',
+
+  'common.errorWithMessage': '错误：{message}',
+  'common.no': '取消',
+  'common.yes': '确认',
+
+  'composer.placeholder': '在这里输入文本，或粘贴 / 拖拽文件...',
+  'composer.addFile': '添加文件',
+  'composer.clear': '清空',
+  'composer.send': '发送',
+  'composer.dropFiles': '松开以上传文件',
+
+  'records.errorPrefix': '错误',
+  'records.empty': '暂无上传记录。可在上方粘贴文本或添加文件。',
+  'records.loadMore': '加载更多',
+  'records.copyText': '复制文本',
+  'records.downloadAll': '下载全部',
+  'records.delete': '删除',
+
+  'password.title': '需要密码',
+  'password.caption': '输入共享密码后可查看与管理上传记录。',
+  'password.label': '密码',
+  'password.placeholder': '请输入密码',
+  'password.validating': '校验中...',
+  'password.ok': '确认',
+
+  'sw.newVersion': '发现新版本，点击刷新',
+
+  'errors.noContent': '没有可上传的文件或文本',
+  'errors.uploadFailed': '上传失败',
+  'errors.passwordRequired': '需要密码',
+  'errors.unknown': '发生未知错误',
+} as const;
+
+const en = {
+  'language.switchAria': 'Language switch',
+  'language.zhCN': '中文',
+  'language.en': 'EN',
+
+  'common.errorWithMessage': 'Error: {message}',
+  'common.no': 'No',
+  'common.yes': 'Yes',
+
+  'composer.placeholder': 'Type text here, or paste / drop files...',
+  'composer.addFile': 'Add file',
+  'composer.clear': 'Clear',
+  'composer.send': 'Send',
+  'composer.dropFiles': 'Drop files to upload',
+
+  'records.errorPrefix': 'Error',
+  'records.empty': 'No uploads yet. Paste text or add files above to create your first entry.',
+  'records.loadMore': 'Load more',
+  'records.copyText': 'Copy Text',
+  'records.downloadAll': 'Download All',
+  'records.delete': 'Delete',
+
+  'password.title': 'Password required',
+  'password.caption': 'Enter the shared key to unlock upload history and files.',
+  'password.label': 'Password',
+  'password.placeholder': 'Password',
+  'password.validating': 'Validating...',
+  'password.ok': 'OK',
+
+  'sw.newVersion': 'New version available. Click to refresh',
+
+  'errors.noContent': 'No files or text to upload',
+  'errors.uploadFailed': 'Upload failed',
+  'errors.passwordRequired': 'Password required',
+  'errors.unknown': 'Unknown error',
+} as const;
+
+type Dictionary = typeof zhCN;
+export type TranslationKey = keyof Dictionary;
+
+const dictionaries: Record<Locale, Dictionary> = {
+  'zh-CN': zhCN,
+  en,
+};
+
+const errorCodeMap: Record<string, TranslationKey> = {
+  'error.noContent': 'errors.noContent',
+  'error.uploadFailed': 'errors.uploadFailed',
+  'error.passwordRequired': 'errors.passwordRequired',
+  'error.unknown': 'errors.unknown',
+  'No files or text': 'errors.noContent',
+  'Upload failed': 'errors.uploadFailed',
+  'Password required': 'errors.passwordRequired',
+};
+
+let runtimeLocale: Locale = defaultLocale;
+
+export function isSupportedLocale(input: string): input is Locale {
+  return input === 'zh-CN' || input === 'en';
+}
+
+export function resolveLocale(input?: string | null): Locale | null {
+  if (!input) return null;
+  const raw = input.trim();
+  const lower = raw.toLowerCase();
+
+  const exact = supportedLocales.find((item) => item.toLowerCase() === lower);
+  if (exact) return exact;
+
+  const base = lower.split(/[-_]/)[0];
+  if (base) {
+    const matchedByBase = supportedLocales.find((item) => {
+      const itemLower = item.toLowerCase();
+      return itemLower === base || itemLower.startsWith(`${base}-`);
+    });
+    if (matchedByBase) return matchedByBase;
+  }
+
+  return null;
+}
+
+export function detectInitialLocale(candidates?: readonly string[]): Locale {
+  const source = candidates?.length
+    ? candidates
+    : (typeof navigator !== 'undefined'
+      ? [...(navigator.languages || []), navigator.language]
+      : []);
+
+  for (const item of source) {
+    const resolved = resolveLocale(item);
+    if (resolved) return resolved;
+  }
+  return defaultLocale;
+}
+
+export function setRuntimeLocale(locale: Locale) {
+  runtimeLocale = locale;
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = locale;
+  }
+}
+
+export function getRuntimeLocale() {
+  return runtimeLocale;
+}
+
+export function t(
+  locale: Locale,
+  key: TranslationKey,
+  params?: Record<string, string | number>,
+) {
+  const dict = dictionaries[locale] || dictionaries[defaultLocale];
+  let text = dict[key] || dictionaries[defaultLocale][key];
+
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+export function tRuntime(
+  key: TranslationKey,
+  params?: Record<string, string | number>,
+) {
+  return t(runtimeLocale, key, params);
+}
+
+export function tError(locale: Locale, rawError?: string | null) {
+  if (!rawError) return t(locale, 'errors.unknown');
+
+  const normalized = rawError.startsWith('Error: ')
+    ? rawError.slice('Error: '.length)
+    : rawError;
+  const mappedKey = errorCodeMap[normalized];
+  if (mappedKey) return t(locale, mappedKey);
+  return normalized;
+}
