@@ -35,7 +35,6 @@ const App = () => {
       <div className="app-ruler" aria-hidden="true" />
       <div className="app-orb app-orb-top" aria-hidden="true" />
       <div className="app-orb app-orb-bottom" aria-hidden="true" />
-      <div className="app-border" aria-hidden="true" />
       <div className="app-fade" aria-hidden="true" />
       <PasswordInput />
     </div>

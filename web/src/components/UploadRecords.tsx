@@ -125,8 +125,9 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
           <div className="record-files">
             {files.map((file, index) => {
               const link = `/api/download/${props.record.slug}/${index}`;
+              const fileExt = getFileExt(file.name);
               return (
-                <div key={file.path}>
+                <div key={file.path} className="record-file-item">
                   <a
                     href={link}
                     target="_blank"
@@ -137,16 +138,26 @@ const UploadRecordItem = memo((props: { record: UploadRecord }) => {
                     {file.thumbnail ? (
                       <>
                         <img src={file.thumbnail} className="record-file-thumb" />
-                        <div className="min-w-0">
+                        <div className="record-file-info">
                           <div className="record-file-name">{file.name}</div>
-                          <div className="record-file-size">{toReadableSize(file.size)}</div>
+                          <div className="record-file-size-row">
+                            {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
+                            <span className="record-file-size">{toReadableSize(file.size)}</span>
+                          </div>
                         </div>
                       </>
                     ) : (
                       <>
-                        <i className="i-lucide-file text-[18px]"></i>
-                        <span className="record-file-name">{file.name}</span>
-                        <span className="record-file-size">{toReadableSize(file.size)}</span>
+                        <div className="record-file-icon-wrap" aria-hidden="true">
+                          <i className="i-lucide-file record-file-icon"></i>
+                        </div>
+                        <div className="record-file-info">
+                          <div className="record-file-name">{file.name}</div>
+                          <div className="record-file-size-row">
+                            {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
+                            <span className="record-file-size">{toReadableSize(file.size)}</span>
+                          </div>
+                        </div>
                       </>
                     )}
                   </a>
@@ -170,6 +181,13 @@ function toReadableSize(size: number) {
     unit++;
   }
   return `${size.toFixed(1)} ${units[unit]}`;
+}
+
+function getFileExt(name: string) {
+  const dotIndex = name.lastIndexOf('.');
+  if (dotIndex <= 0) return '';
+  if (dotIndex === name.length - 1) return '';
+  return name.slice(dotIndex + 1).toUpperCase();
 }
 
 function copyToClipboard(text: string) {

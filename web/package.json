@@ -32,6 +32,7 @@
     "chroma-js": "^3.1.2",
     "postcss": "^8.4.49",
     "postcss-loader": "^8.1.1",
+    "sass": "^1.99.0",
     "typescript": "^5.7.2",
     "workbox-core": "^7.3.0",
     "workbox-precaching": "^7.3.0",
