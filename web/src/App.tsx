@@ -8,6 +8,7 @@ import { useLocale, useT } from './store/locale';
 import { localeOptions, tError } from './i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useThemeMode } from './store/theme';
+import { logout, passwordAtom } from './store/auth';
 
 const App = () => {
   return (
@@ -16,6 +17,7 @@ const App = () => {
         <div className="app-controls">
           <LanguageSwitcher />
           <ThemeSwitcher />
+          <LogoutButton />
         </div>
       </div>
 
@@ -127,6 +129,26 @@ function ThemeSwitcher() {
       onClick={() => setThemeMode(nextMode)}
     >
       <i className={`${icon} theme-trigger-icon`} />
+    </button>
+  );
+}
+
+function LogoutButton() {
+  const t = useT();
+  const [password] = useAtom(passwordAtom);
+
+  if (!password) return null;
+
+  return (
+    <button
+      type="button"
+      className="theme-trigger logout-trigger"
+      aria-label={t('auth.logoutAria')}
+      onClick={() => {
+        void logout();
+      }}
+    >
+      <i className="i-lucide-log-out theme-trigger-icon logout-trigger-icon" />
     </button>
   );
 }

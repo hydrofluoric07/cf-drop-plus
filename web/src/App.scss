@@ -1,6 +1,6 @@
 :root {
   --bg: #efefeb;
-  --bg-shade: #e6e6e1;
+  --bg-shade: #efefeb;
   --surface: #ffffff;
   --surface-soft: #f7f7f4;
   --surface-hover: #f1f1ed;
@@ -38,6 +38,8 @@
   --record-file-bg: #fcfcfb;
   --record-file-hover-bg: #f7f7f3;
   --record-file-hover-line: #b8b8b0;
+  --progress-wrap-bg: rgba(255, 255, 255, 0.72);
+  --file-pill-bg: #fbfbf9;
   --password-mask-bg: rgba(17, 17, 16, 0.36);
   --password-card-bg: #fff;
   --password-card-line: rgba(0, 0, 0, 0.16);
@@ -48,9 +50,9 @@
   --grain-opacity: 0.16;
   --ruler-opacity: 0.14;
   --app-border-line: rgba(0, 0, 0, 0.08);
-  --app-fade: linear-gradient(to bottom, rgba(255, 255, 255, 0.22), transparent 38%);
-  --bg-glow-1: radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.9) 0 12%, transparent 54%);
-  --bg-glow-2: radial-gradient(circle at 82% 80%, rgba(255, 255, 255, 0.7) 0 14%, transparent 50%);
+  --app-fade: none;
+  --bg-glow-1: none;
+  --bg-glow-2: none;
   --status-error-bg: linear-gradient(90deg, var(--danger-soft), rgba(255, 240, 239, 0.35));
   --status-error-line: rgba(180, 35, 24, 0.24);
   --radius-sm: 10px;
@@ -101,6 +103,8 @@
   --record-file-bg: #262831;
   --record-file-hover-bg: #30333d;
   --record-file-hover-line: #525867;
+  --progress-wrap-bg: rgba(24, 25, 30, 0.78);
+  --file-pill-bg: #23252d;
   --password-mask-bg: rgba(6, 7, 10, 0.62);
   --password-card-bg: #21232a;
   --password-card-line: rgba(255, 255, 255, 0.14);
@@ -111,9 +115,9 @@
   --grain-opacity: 0.1;
   --ruler-opacity: 0.09;
   --app-border-line: rgba(255, 255, 255, 0.12);
-  --app-fade: linear-gradient(to bottom, rgba(255, 255, 255, 0.04), transparent 34%);
-  --bg-glow-1: radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.07) 0 12%, transparent 55%);
-  --bg-glow-2: radial-gradient(circle at 82% 80%, rgba(255, 255, 255, 0.06) 0 16%, transparent 52%);
+  --app-fade: linear-gradient(to bottom, rgba(6, 7, 10, 0.34), transparent 42%);
+  --bg-glow-1: none;
+  --bg-glow-2: none;
   --status-error-bg: linear-gradient(90deg, rgba(95, 42, 49, 0.9), rgba(95, 42, 49, 0.35));
   --status-error-line: rgba(241, 129, 129, 0.34);
 }
@@ -395,12 +399,13 @@ textarea:focus-visible,
 
 .progress-wrap {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--progress-wrap-bg);
 }
 
 .status-error {
   padding: 0.62rem 1rem;
   font-size: 0.86rem;
+  font-family: inherit;
   color: var(--danger);
   background: var(--status-error-bg);
   border-bottom: 1px solid var(--status-error-line);
@@ -498,7 +503,7 @@ textarea:focus-visible,
   padding: 0.34rem 0.5rem;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: #fbfbf9;
+  background: var(--file-pill-bg);
 }
 
 .file-pill-thumb {
@@ -562,6 +567,7 @@ textarea:focus-visible,
 .records-empty,
 .records-error {
   color: var(--text-soft);
+  font-family: inherit;
   padding: 1.1rem;
   text-align: center;
 }
@@ -591,6 +597,7 @@ textarea:focus-visible,
   margin: 0 0 0.72rem;
   line-height: 1.6;
   font-size: 0.9rem;
+  font-family: inherit;
   white-space: pre-wrap;
   color: var(--text);
 }
@@ -817,6 +824,7 @@ textarea:focus-visible,
 }
 
 .app-orb {
+  display: none;
   position: absolute;
   pointer-events: none;
   filter: blur(60px);

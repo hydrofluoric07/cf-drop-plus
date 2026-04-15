@@ -18,6 +18,7 @@ const zhCN = {
   'theme.switchAria': '主题切换',
   'theme.light': '浅色模式',
   'theme.dark': '深色模式',
+  'auth.logoutAria': '退出登录',
 
   'common.errorWithMessage': '错误：{message}',
   'common.no': '取消',
@@ -58,6 +59,7 @@ const en = {
   'theme.switchAria': 'Theme switch',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
+  'auth.logoutAria': 'Logout',
 
   'common.errorWithMessage': 'Error: {message}',
   'common.no': 'No',

@@ -33,3 +33,9 @@ export async function fetchAPI(input: RequestInfo | URL, init?: RequestInit) {
   store.set(passwordInvalidAtom, false);
   return res;
 }
+
+export async function logout() {
+  store.set(passwordAtom, '');
+  store.set(passwordInvalidAtom, true);
+  await KvStore.password.set('');
+}
