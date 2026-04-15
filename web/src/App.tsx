@@ -7,12 +7,16 @@ import { uploadingErrorAtom, uploadingProgressAtom } from './store/uploading';
 import { useLocale, useT } from './store/locale';
 import { localeOptions, tError } from './i18n';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useThemeMode } from './store/theme';
 
 const App = () => {
   return (
     <div className="app-root">
       <div className="app-topbar">
-        <LanguageSwitcher />
+        <div className="app-controls">
+          <LanguageSwitcher />
+          <ThemeSwitcher />
+        </div>
       </div>
 
       <main className="app-shell">
@@ -43,7 +47,6 @@ function LanguageSwitcher() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
-  const current = localeOptions.find((item) => item.code === locale) ?? localeOptions[0];
 
   useEffect(() => {
     if (!open) return;
@@ -83,8 +86,6 @@ function LanguageSwitcher() {
         onClick={() => setOpen((v) => !v)}
       >
         <i className="i-lucide-languages locale-trigger-icon" />
-        <span className="locale-trigger-text">{current.label}</span>
-        <i className="i-lucide-chevron-down locale-trigger-arrow" />
       </button>
 
       {open && (
@@ -109,6 +110,24 @@ function LanguageSwitcher() {
         </div>
       )}
     </div>
+  );
+}
+
+function ThemeSwitcher() {
+  const t = useT();
+  const [themeMode, setThemeMode] = useThemeMode();
+  const icon = themeMode === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun';
+  const nextMode = themeMode === 'dark' ? 'light' : 'dark';
+
+  return (
+    <button
+      type="button"
+      className="theme-trigger"
+      aria-label={t('theme.switchAria')}
+      onClick={() => setThemeMode(nextMode)}
+    >
+      <i className={`${icon} theme-trigger-icon`} />
+    </button>
   );
 }
 

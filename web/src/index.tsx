@@ -5,10 +5,11 @@ import { store } from './store';
 import App from './App';
 import 'uno.css';
 import { ensureLocaleReady } from './store/locale';
+import { ensureThemeReady } from './store/theme';
 
 const rootEl = document.getElementById('root');
 if (rootEl) {
-  ensureLocaleReady().finally(() => {
+  Promise.all([ensureLocaleReady(), ensureThemeReady()]).finally(() => {
     void import('./sw-client');
     const root = ReactDOM.createRoot(rootEl);
     root.render(

@@ -15,6 +15,9 @@ const zhCN = {
   'language.switchAria': '语言切换',
   'language.zhCN': '中文',
   'language.en': 'EN',
+  'theme.switchAria': '主题切换',
+  'theme.light': '浅色模式',
+  'theme.dark': '深色模式',
 
   'common.errorWithMessage': '错误：{message}',
   'common.no': '取消',
@@ -52,6 +55,9 @@ const en = {
   'language.switchAria': 'Language switch',
   'language.zhCN': '中文',
   'language.en': 'EN',
+  'theme.switchAria': 'Theme switch',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
 
   'common.errorWithMessage': 'Error: {message}',
   'common.no': 'No',
