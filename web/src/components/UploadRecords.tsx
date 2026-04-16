@@ -19,7 +19,7 @@ export const UploadRecords = memo(() => {
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
 
   // all records. newest first
-  const { data, error, isLoading, isValidating, mutate, size, setSize } = useSWRInfinite(
+  const { data, error, isLoading, mutate } = useSWRInfinite(
     (_, page?: UploadRecord[]) => (page ? String(page?.at(-1)?.id ?? '') : 'init'),
     (beforeId) =>
       fetchAPI('/api/list?beforeId=' + beforeId).then((res) => res.json() as Promise<UploadRecord[]>),
@@ -124,10 +124,6 @@ export const UploadRecords = memo(() => {
             ))}
           </div>
         ))}
-        <button onClick={() => setSize(size + 1)} disabled={isValidating} className="records-more">
-          {isValidating && <i className="i-lucide-loader-circle animate-spin"></i>}
-          {t('records.loadMore')}
-        </button>
       </div>
       {previewOverlay}
     </>

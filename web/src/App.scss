@@ -377,7 +377,7 @@ textarea:focus-visible,
   width: min(980px, 100%);
   margin: 0 auto;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto;
   gap: 1rem;
 }
 
@@ -392,13 +392,12 @@ textarea:focus-visible,
 }
 
 .records-panel {
-  min-height: 48vh;
-  max-height: calc(100vh - 230px);
   background: var(--panel-muted-bg);
   border: 1px solid var(--panel-muted-line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
   animation: panel-in 520ms cubic-bezier(0.18, 0.86, 0.38, 1);
+  overflow: visible;
 }
 
 .progress-wrap {
@@ -664,6 +663,7 @@ textarea:focus-visible,
 .records-list {
   display: grid;
   gap: 0.9rem;
+  padding: 0 1rem 1rem;
 }
 
 .records-page {
@@ -680,6 +680,7 @@ textarea:focus-visible,
 }
 
 .record-card {
+  width: 100%;
   background: var(--record-card-bg);
   border: 1px solid var(--record-card-line);
   border-radius: 14px;
@@ -1091,7 +1092,7 @@ textarea:focus-visible,
   }
 
   .records-panel {
-    max-height: calc(100vh - 210px);
+    max-height: none;
   }
 
   .image-preview-dialog {
@@ -1126,6 +1127,10 @@ textarea:focus-visible,
 
   .composer {
     padding: 0.72rem;
+  }
+
+  .records-list {
+    padding: 0 0.72rem 0.72rem;
   }
 
   .composer-input-row {

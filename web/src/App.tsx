@@ -27,7 +27,7 @@ const App = () => {
           <ContentInput />
         </section>
 
-        <section className="records-panel withScrollbar">
+        <section className="records-panel">
           <UploadRecords />
         </section>
       </main>
