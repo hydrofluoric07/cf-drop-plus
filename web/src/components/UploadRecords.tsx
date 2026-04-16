@@ -1,28 +1,112 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import useSWRInfinite from 'swr/infinite';
+import useSWR from 'swr';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
 
-import type { UploadRecord } from '../../../src/database';
+import type { RecordFilterType, UploadRecord } from '../../../src/database';
 import { fetchAPI } from '../store/auth';
 import { PopoverConfirm } from './PopoverConfirm';
 import { useLocale, useT } from '../store/locale';
-import { tError } from '../i18n';
+import { tError, type TranslationKey } from '../i18n';
 
-dayjs.extend(relativeTime);
+const recordTypeOptions: Array<{ value: RecordFilterType; labelKey: 'records.filterTypeAll' | 'records.filterTypeText' | 'records.filterTypeImage' | 'records.filterTypeDocument' | 'records.filterTypeArchive' | 'records.filterTypeAudio' | 'records.filterTypeOther' }> = [
+  { value: 'all', labelKey: 'records.filterTypeAll' },
+  { value: 'text', labelKey: 'records.filterTypeText' },
+  { value: 'image', labelKey: 'records.filterTypeImage' },
+  { value: 'document', labelKey: 'records.filterTypeDocument' },
+  { value: 'archive', labelKey: 'records.filterTypeArchive' },
+  { value: 'audio', labelKey: 'records.filterTypeAudio' },
+  { value: 'other', labelKey: 'records.filterTypeOther' },
+];
+
+type UploaderDeviceType = 'windows' | 'macos' | 'linux' | 'ios' | 'android' | 'ipados' | 'unknown';
+
+const uploaderDeviceLabelKeys: Record<UploaderDeviceType, TranslationKey> = {
+  windows: 'records.deviceWindows',
+  macos: 'records.deviceMacos',
+  linux: 'records.deviceLinux',
+  ios: 'records.deviceIos',
+  android: 'records.deviceAndroid',
+  ipados: 'records.deviceIpados',
+  unknown: 'records.deviceUnknown',
+};
+
+const uploaderDeviceIcons: Record<UploaderDeviceType, string> = {
+  windows: 'i-lucide-monitor',
+  macos: 'i-lucide-laptop',
+  linux: 'i-lucide-terminal',
+  ios: 'i-lucide-smartphone',
+  android: 'i-lucide-smartphone',
+  ipados: 'i-lucide-tablet',
+  unknown: 'i-lucide-circle-help',
+};
+
+interface RecordCountResponse {
+  total: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 export const UploadRecords = memo(() => {
   const [locale] = useLocale();
   const t = useT();
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedType, setSelectedType] = useState<RecordFilterType>('all');
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const typeMenuWrapRef = useRef<HTMLDivElement>(null);
+  const typeMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const typeMenuId = useId();
+
+  const dateRange = useMemo(() => {
+    if (!selectedDate) return null;
+    const start = dayjs(selectedDate, 'YYYY-MM-DD');
+    if (!start.isValid()) return null;
+    return {
+      from: start.startOf('day').valueOf(),
+      to: start.add(1, 'day').startOf('day').valueOf(),
+    };
+  }, [selectedDate]);
+
+  const filterSearch = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedType !== 'all') params.set('recordType', selectedType);
+    if (dateRange) {
+      params.set('dateFrom', String(dateRange.from));
+      params.set('dateTo', String(dateRange.to));
+    }
+    return params;
+  }, [dateRange, selectedType]);
+
+  const countKey = useMemo(() => {
+    const query = filterSearch.toString();
+    return query ? `/api/list/count?${query}` : '/api/list/count';
+  }, [filterSearch]);
+
+  const { data: countData, mutate: mutateCount } = useSWR(
+    countKey,
+    (url: string) => fetchAPI(url).then((res) => res.json() as Promise<RecordCountResponse>),
+  );
 
   // all records. newest first
-  const { data, error, isLoading, mutate } = useSWRInfinite(
-    (_, page?: UploadRecord[]) => (page ? String(page?.at(-1)?.id ?? '') : 'init'),
-    (beforeId) =>
-      fetchAPI('/api/list?beforeId=' + beforeId).then((res) => res.json() as Promise<UploadRecord[]>),
+  const { data, error, isLoading, isValidating, mutate, setSize } = useSWRInfinite(
+    (pageIndex, previousPage?: UploadRecord[]) => {
+      if (pageIndex > 0 && previousPage && !previousPage.length) return null;
+
+      const params = new URLSearchParams(filterSearch);
+      if (pageIndex > 0) {
+        const beforeId = previousPage?.at(-1)?.id;
+        if (!beforeId) return null;
+        params.set('beforeId', String(beforeId));
+      }
+
+      const query = params.toString();
+      return query ? `/api/list?${query}` : '/api/list';
+    },
+    (url: string) => fetchAPI(url).then((res) => res.json() as Promise<UploadRecord[]>),
   );
 
   useEffect(() => {
@@ -32,10 +116,41 @@ export const UploadRecords = memo(() => {
   useEffect(() => {
     const refresh = () => {
       mutate();
+      mutateCount();
     };
     window.addEventListener('records-updated', refresh);
     return () => window.removeEventListener('records-updated', refresh);
-  }, [mutate]);
+  }, [mutate, mutateCount]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    void setSize(1);
+  }, [countKey, setSize]);
+
+  useEffect(() => {
+    if (!typeMenuOpen) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!typeMenuWrapRef.current?.contains(target)) {
+        setTypeMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTypeMenuOpen(false);
+        typeMenuTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [typeMenuOpen]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -68,6 +183,38 @@ export const UploadRecords = memo(() => {
     const absoluteUrl = new URL(previewImage.src, window.location.origin).toString();
     void copyToClipboard(absoluteUrl);
   }, [previewImage]);
+
+  const totalPages = countData?.totalPages || 0;
+  const visiblePage = data?.[currentPage - 1] || [];
+  const displayCurrentPage = totalPages === 0 ? 0 : Math.min(currentPage, totalPages);
+  const selectedTypeOption = useMemo(
+    () => recordTypeOptions.find((item) => item.value === selectedType) || recordTypeOptions[0],
+    [selectedType],
+  );
+
+  useEffect(() => {
+    if (!totalPages) {
+      if (currentPage !== 1) setCurrentPage(1);
+      return;
+    }
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const handlePrevPage = useCallback(() => {
+    setCurrentPage((prev) => Math.max(1, prev - 1));
+  }, []);
+
+  const handleNextPage = useCallback(() => {
+    if (!totalPages || currentPage >= totalPages) return;
+    const targetPage = currentPage + 1;
+    if (data && data.length >= targetPage) {
+      setCurrentPage(targetPage);
+      return;
+    }
+    void setSize(targetPage).then(() => {
+      setCurrentPage(targetPage);
+    });
+  }, [currentPage, data, setSize, totalPages]);
 
   const previewOverlay = previewImage && typeof document !== 'undefined'
     ? createPortal(
@@ -108,22 +255,102 @@ export const UploadRecords = memo(() => {
 
   return (
     <>
+      <div className="records-toolbar">
+        <div className="records-filters">
+          <label className="records-filter-field">
+            <span className="sr-only">{t('records.filterDateAria')}</span>
+            <input
+              type="date"
+              className="records-filter-control records-filter-date"
+              value={selectedDate}
+              aria-label={t('records.filterDateAria')}
+              onChange={(event) => setSelectedDate(event.target.value)}
+            />
+          </label>
+          <label className="records-filter-field">
+            <span className="sr-only">{t('records.filterTypeAria')}</span>
+            <div className="records-filter-select-wrap" ref={typeMenuWrapRef}>
+              <button
+                ref={typeMenuTriggerRef}
+                type="button"
+                className={`records-filter-control records-filter-select records-filter-select-btn ${typeMenuOpen ? 'is-open' : ''}`}
+                aria-label={t('records.filterTypeAria')}
+                aria-haspopup="listbox"
+                aria-expanded={typeMenuOpen}
+                aria-controls={typeMenuId}
+                onClick={() => setTypeMenuOpen((prev) => !prev)}
+              >
+                <span className="records-filter-select-label">{t(selectedTypeOption.labelKey)}</span>
+                <i className="i-lucide-chevron-down records-filter-select-icon" aria-hidden="true" />
+              </button>
+              {typeMenuOpen && (
+                <div id={typeMenuId} role="listbox" className="records-type-menu">
+                {recordTypeOptions.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    role="option"
+                    className={`records-type-option ${item.value === selectedType ? 'is-active' : ''}`}
+                    aria-selected={item.value === selectedType}
+                    onClick={() => {
+                      setSelectedType(item.value);
+                      setTypeMenuOpen(false);
+                      typeMenuTriggerRef.current?.focus();
+                    }}
+                  >
+                    <span className="records-type-option-label">{t(item.labelKey)}</span>
+                    {item.value === selectedType && <i className="i-lucide-check records-type-option-check" />}
+                  </button>
+                ))}
+                </div>
+              )}
+            </div>
+          </label>
+        </div>
+      </div>
       <div className="records-list">
         {error && (
           <div className="records-error">
             {t('common.errorWithMessage', { message: tError(locale, error.message) })}
           </div>
         )}
-        {!error && !isLoading && (!data || !data.some((it) => it.length)) && (
+        {!error && !isLoading && totalPages === 0 && (
           <div className="records-empty">{t('records.empty')}</div>
         )}
-        {data?.map((page, i) => (
-          <div key={i} className="records-page">
-            {page.map((record) => (
+        {!error && visiblePage.length > 0 && (
+          <div className="records-page">
+            {visiblePage.map((record) => (
               <UploadRecordItem key={record.id} record={record} onPreviewImage={openImagePreview} />
             ))}
           </div>
-        ))}
+        )}
+      </div>
+      <div className="records-pagination-wrap">
+        <div className="records-pagination" role="navigation" aria-label={t('records.paginationAria')}>
+          <button
+            type="button"
+            className="records-page-btn"
+            onClick={handlePrevPage}
+            aria-label={t('records.paginationPrev')}
+            title={t('records.paginationPrev')}
+            disabled={currentPage <= 1 || isLoading || isValidating}
+          >
+            <i className="i-lucide-chevron-left records-page-btn-icon" />
+          </button>
+          <span className="records-pagination-status">
+            {t('records.paginationLabel', { current: displayCurrentPage, total: totalPages })}
+          </span>
+          <button
+            type="button"
+            className="records-page-btn"
+            onClick={handleNextPage}
+            aria-label={t('records.paginationNext')}
+            title={t('records.paginationNext')}
+            disabled={!totalPages || currentPage >= totalPages || isLoading || isValidating}
+          >
+            <i className="i-lucide-chevron-right records-page-btn-icon" />
+          </button>
+        </div>
       </div>
       {previewOverlay}
     </>
@@ -133,17 +360,21 @@ export const UploadRecords = memo(() => {
 const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (src: string, name: string) => void }) => {
   const t = useT();
   const files = useMemo(() => props.record.files || [], [props.record.files]);
+  const uploaderType = normalizeUploaderType(props.record.uploader);
+  const uploaderLabel = t(uploaderDeviceLabelKeys[uploaderType]);
+  const uploaderIcon = uploaderDeviceIcons[uploaderType];
+  const recordTime = formatRecordTime(props.record.ctime, t);
 
   const actionLink = 'record-action';
 
   const meta = <div className="record-meta">
-    <span>
-      <i className="i-lucide-user mr-1"></i>
-      {props.record.uploader}
+    <span title={uploaderLabel}>
+      <i className={`${uploaderIcon} mr-1`}></i>
+      {uploaderLabel}
     </span>
     <span title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
       <i className="i-lucide-clock mr-1"></i>
-      {dayjs(props.record.ctime).fromNow()}
+      {recordTime}
     </span>
     {!!props.record.size && (
       <span title={`${props.record.size} bytes`}>
@@ -253,6 +484,34 @@ const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (s
     </article>
   );
 });
+
+function normalizeUploaderType(rawUploader?: string | null): UploaderDeviceType {
+  const raw = String(rawUploader || '').trim().toLowerCase();
+  if (!raw) return 'unknown';
+  if (raw === 'yon') return 'unknown';
+
+  if (raw === 'windows' || raw.includes('windows') || raw.includes('win')) return 'windows';
+  if (raw === 'macos' || raw.includes('mac') || raw.includes('osx')) return 'macos';
+  if (raw === 'linux' || raw.includes('linux') || raw.includes('ubuntu') || raw.includes('debian')) return 'linux';
+  if (raw === 'ipados' || raw.includes('ipados') || raw.includes('ipad')) return 'ipados';
+  if (raw === 'ios' || raw.includes('iphone') || raw.includes('ipod') || raw === 'ios') return 'ios';
+  if (raw === 'android' || raw.includes('android')) return 'android';
+  if (raw === 'desktop' || raw.includes('desktop') || raw.includes('pc') || raw.includes('computer')) return 'unknown';
+  if (raw === 'unknown') return 'unknown';
+
+  return 'unknown';
+}
+
+function formatRecordTime(
+  ctime: number,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+) {
+  const value = dayjs(ctime);
+  const time = value.format('HH:mm:ss');
+  if (value.isSame(dayjs(), 'day')) return `${t('records.timeToday')} ${time}`;
+  if (value.isSame(dayjs().subtract(1, 'day'), 'day')) return `${t('records.timeYesterday')} ${time}`;
+  return value.format('YYYY-MM-DD HH:mm:ss');
+}
 
 function toReadableSize(size: number) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];

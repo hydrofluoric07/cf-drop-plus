@@ -32,6 +32,142 @@ export interface RecordFileItem {
   type?: string;
 }
 
+export const recordFilterTypes = ['all', 'text', 'image', 'document', 'archive', 'audio', 'other'] as const;
+export type RecordFilterType = (typeof recordFilterTypes)[number];
+
+interface ListUploadRecordsOptions {
+  beforeId?: number;
+  recordType?: RecordFilterType;
+  dateFrom?: number;
+  dateTo?: number;
+  limit?: number;
+}
+
+interface CountUploadRecordsOptions {
+  recordType?: RecordFilterType;
+  dateFrom?: number;
+  dateTo?: number;
+}
+
+const IMAGE_FILE_EXTS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'bmp',
+  'svg',
+  'avif',
+  'heic',
+]);
+
+const DOCUMENT_FILE_EXTS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt',
+  'md',
+  'rtf',
+  'csv',
+  'json',
+  'xml',
+  'yaml',
+  'yml',
+]);
+
+const ARCHIVE_FILE_EXTS = new Set([
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  'tgz',
+]);
+
+const AUDIO_FILE_EXTS = new Set([
+  'mp3',
+  'wav',
+  'flac',
+  'aac',
+  'm4a',
+  'ogg',
+  'opus',
+]);
+
+function getFileExtLower(name: string) {
+  const dotIndex = name.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex >= name.length - 1) return '';
+  return name.slice(dotIndex + 1).toLowerCase();
+}
+
+function isDocumentMime(mime: string) {
+  if (!mime) return false;
+  if (mime.startsWith('text/')) return true;
+  if (mime === 'application/pdf' || mime === 'application/rtf') return true;
+  if (mime.startsWith('application/msword')) return true;
+  if (mime.startsWith('application/vnd.openxmlformats-officedocument')) return true;
+  if (mime.startsWith('application/vnd.ms-')) return true;
+  if (mime.endsWith('/json') || mime.endsWith('/xml') || mime.endsWith('/yaml')) return true;
+  return false;
+}
+
+function isArchiveMime(mime: string) {
+  if (!mime) return false;
+  return [
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-rar-compressed',
+    'application/vnd.rar',
+    'application/x-7z-compressed',
+    'application/gzip',
+    'application/x-gzip',
+    'application/x-tar',
+    'application/x-bzip2',
+    'application/x-xz',
+  ].includes(mime);
+}
+
+function isTypeMatchedByFile(file: RecordFileItem, recordType: Exclude<RecordFilterType, 'all' | 'text'>) {
+  const mime = String(file.type || '').toLowerCase();
+  const ext = getFileExtLower(file.name || '');
+
+  const matchesImage = mime.startsWith('image/') || Boolean(file.thumbnail) || IMAGE_FILE_EXTS.has(ext);
+  const matchesDocument = isDocumentMime(mime) || DOCUMENT_FILE_EXTS.has(ext);
+  const matchesArchive = isArchiveMime(mime) || ARCHIVE_FILE_EXTS.has(ext);
+  const matchesAudio = mime.startsWith('audio/') || AUDIO_FILE_EXTS.has(ext);
+
+  if (recordType === 'image') return matchesImage;
+  if (recordType === 'document') return matchesDocument;
+  if (recordType === 'archive') return matchesArchive;
+  if (recordType === 'audio') return matchesAudio;
+  if (recordType === 'other') return !matchesImage && !matchesDocument && !matchesArchive && !matchesAudio;
+
+  return false;
+}
+
+function isRecordMatched(record: UploadRecord, opts: ListUploadRecordsOptions) {
+  if (typeof opts.dateFrom === 'number' && Number.isFinite(opts.dateFrom) && record.ctime < opts.dateFrom) {
+    return false;
+  }
+  if (typeof opts.dateTo === 'number' && Number.isFinite(opts.dateTo) && record.ctime >= opts.dateTo) {
+    return false;
+  }
+
+  const recordType = opts.recordType || 'all';
+  if (recordType === 'all') return true;
+  if (recordType === 'text') return Boolean(record.message && record.message.trim());
+
+  const files = record.files || [];
+  if (!files.length) return false;
+  return files.some((file) => isTypeMatchedByFile(file, recordType));
+}
+
 function fromDB(data: any): UploadRecord {
   let files: RecordFileItem[] = [];
   try {
@@ -65,6 +201,7 @@ function toDB(record: UploadRecord) {
             size: +item.size,
             path: String(item.path || ""),
             thumbnail: String(item.thumbnail || ""),
+            type: String(item.type || ""),
           }
       ).filter(Boolean)
     ),
@@ -79,21 +216,72 @@ function toDB(record: UploadRecord) {
  */
 export async function listUploadRecords(
   db: D1Database,
-  opts: { beforeId?: number } = {}
+  opts: ListUploadRecordsOptions = {}
 ) {
-  const records: UploadRecord[] = [];
+  const matchedRecords: UploadRecord[] = [];
+  const limit = Number.isInteger(opts.limit) && opts.limit! > 0 ? Math.min(opts.limit!, 100) : 20;
+  const pageSize = Math.max(limit, 40);
 
-  let sql = "SELECT * FROM upload_record";
-  if (opts.beforeId && Number.isInteger(opts.beforeId)) {
-    sql += ` WHERE id < ${opts.beforeId}`;
-  }
-  sql += " ORDER BY id DESC LIMIT 20";
+  let cursor = opts.beforeId && Number.isInteger(opts.beforeId) && opts.beforeId > 0 ? opts.beforeId : undefined;
+  while (matchedRecords.length < limit) {
+    let sql = "SELECT * FROM upload_record";
+    if (cursor) {
+      sql += ` WHERE id < ${cursor}`;
+    }
+    sql += ` ORDER BY id DESC LIMIT ${pageSize}`;
 
-  const rows = await db.prepare(sql).all();
-  for (const row of rows.results as any[]) {
-    records.push(fromDB(row));
+    const rows = await db.prepare(sql).all();
+    const page = (rows.results as any[]).map(fromDB);
+    if (!page.length) break;
+
+    for (const record of page) {
+      if (!isRecordMatched(record, opts)) continue;
+      matchedRecords.push(record);
+      if (matchedRecords.length >= limit) break;
+    }
+
+    if (page.length < pageSize) break;
+    cursor = page[page.length - 1].id;
   }
-  return records;
+
+  return matchedRecords.slice(0, limit);
+}
+
+export async function countUploadRecords(
+  db: D1Database,
+  opts: CountUploadRecordsOptions = {}
+) {
+  const hasTypeFilter = opts.recordType && opts.recordType !== 'all';
+  const hasDateFilter = Number.isFinite(opts.dateFrom) || Number.isFinite(opts.dateTo);
+  if (!hasTypeFilter && !hasDateFilter) {
+    const row = await db.prepare("SELECT COUNT(*) AS total FROM upload_record").first<{ total: number }>();
+    return Number(row?.total || 0);
+  }
+
+  const pageSize = 120;
+  let total = 0;
+  let cursor: number | undefined;
+
+  while (true) {
+    let sql = "SELECT * FROM upload_record";
+    if (cursor) {
+      sql += ` WHERE id < ${cursor}`;
+    }
+    sql += ` ORDER BY id DESC LIMIT ${pageSize}`;
+
+    const rows = await db.prepare(sql).all();
+    const page = (rows.results as any[]).map(fromDB);
+    if (!page.length) break;
+
+    for (const record of page) {
+      if (isRecordMatched(record, opts)) total++;
+    }
+
+    if (page.length < pageSize) break;
+    cursor = page[page.length - 1].id;
+  }
+
+  return total;
 }
 
 export async function getUploadRecord(db: D1Database, id: number) {

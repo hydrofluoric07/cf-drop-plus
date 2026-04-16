@@ -12,7 +12,7 @@ export async function invokeUploadAPI(opts: {
   onProgress(percent: number): void,
 }) {
   const { text, files, password, onProgress } = opts;
-  const uploader = 'yon'; // TODO: change it
+  const uploader = detectUploaderDevice();
   const fileInfosStr = JSON.stringify(files.map(f => ({
     thumbnail: f.thumbnail,
     size: f.blob.size,
@@ -74,4 +74,25 @@ export async function invokeUploadAPI(opts: {
 
     xhr.send(body);
   });
+}
+
+function detectUploaderDevice() {
+  if (typeof navigator === 'undefined') return 'unknown';
+
+  const nav = navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  };
+  const ua = String(navigator.userAgent || '').toLowerCase();
+  const platform = String(nav.userAgentData?.platform || navigator.platform || '').toLowerCase();
+  const maxTouchPoints = Number(navigator.maxTouchPoints || 0);
+
+  const isIPadOS = /ipad/.test(ua) || (platform.includes('mac') && maxTouchPoints > 1);
+  if (isIPadOS) return 'ipados';
+  if (/iphone|ipod/.test(ua)) return 'ios';
+  if (/android/.test(ua)) return 'android';
+  if (/windows/.test(ua) || platform.includes('win')) return 'windows';
+  if (/macintosh|mac os x/.test(ua) || platform.includes('mac')) return 'macos';
+  if (/linux|x11/.test(ua) || platform.includes('linux')) return 'linux';
+
+  return 'unknown';
 }

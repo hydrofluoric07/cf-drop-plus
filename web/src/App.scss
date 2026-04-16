@@ -1,4 +1,11 @@
 :root {
+  --app-side-padding-desktop: clamp(1rem, 3vw, 2.3rem);
+  --app-side-padding-mobile: 0.65rem;
+  --shell-max-width: 980px;
+  --scroll-quick-size: 34px;
+  --scroll-quick-size-mobile: 32px;
+  --scroll-quick-gap-desktop: 6px;
+  --scroll-quick-gap-mobile: 4px;
   --bg: #efefeb;
   --bg-shade: #efefeb;
   --surface: #ffffff;
@@ -225,7 +232,7 @@ textarea:focus-visible,
 .app-root {
   position: relative;
   min-height: 100vh;
-  padding: clamp(1rem, 3vw, 2.3rem);
+  padding: clamp(0.72rem, 2.2vw, 1.45rem) var(--app-side-padding-desktop) clamp(1rem, 3vw, 2.3rem);
   overflow: hidden;
 }
 
@@ -233,7 +240,7 @@ textarea:focus-visible,
   position: relative;
   z-index: 12;
   width: min(980px, 100%);
-  margin: 0 auto 0.75rem;
+  margin: 0 auto 0.64rem;
   display: flex;
   justify-content: flex-end;
 }
@@ -360,6 +367,46 @@ textarea:focus-visible,
   color: var(--text-soft);
 }
 
+.scroll-quick-actions {
+  position: fixed;
+  right: max(
+    1.56rem,
+    calc(env(safe-area-inset-right) + 1.42rem),
+    calc(max(var(--app-side-padding-desktop), calc(50vw - calc(var(--shell-max-width) / 2))) - var(--scroll-quick-size) - var(--scroll-quick-gap-desktop))
+  );
+  bottom: max(6.28rem, calc(env(safe-area-inset-bottom) + 0.98rem));
+  z-index: 46;
+  display: inline-grid;
+  gap: 0.42rem;
+}
+
+.scroll-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--scroll-quick-size);
+  height: var(--scroll-quick-size);
+  min-width: var(--scroll-quick-size);
+  min-height: var(--scroll-quick-size);
+  padding: 0;
+  border: 1px solid var(--topbar-control-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--topbar-control-bg-open) 88%, transparent);
+  color: var(--text);
+  box-shadow: 0 10px 18px -18px rgba(0, 0, 0, 1);
+}
+
+.scroll-quick-btn:hover {
+  border-color: var(--topbar-control-line-strong);
+  background: var(--surface-hover);
+}
+
+.scroll-quick-btn-icon {
+  width: 0.92rem;
+  height: 0.92rem;
+  color: currentColor;
+}
+
 @keyframes locale-pop {
   from {
     opacity: 0;
@@ -374,7 +421,7 @@ textarea:focus-visible,
 .app-shell {
   position: relative;
   z-index: 10;
-  width: min(980px, 100%);
+  width: min(var(--shell-max-width), 100%);
   margin: 0 auto;
   display: grid;
   grid-template-rows: auto auto;
@@ -660,15 +707,213 @@ textarea:focus-visible,
   color: var(--text-soft);
 }
 
+.records-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.72rem 1rem 0;
+}
+
+.records-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.34rem 0;
+}
+
+.records-filter-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.records-filter-control {
+  display: block;
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 0 0.54rem;
+  max-width: min(44vw, 188px);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.records-filter-control:hover {
+  border-color: var(--line-hover);
+  background: var(--surface-soft);
+}
+
+.records-filter-control:focus-visible {
+  outline: 0;
+  border-color: var(--line-strong);
+  box-shadow: var(--focus-shadow);
+}
+
+.records-filter-date {
+  min-width: 136px;
+  padding-right: 0.44rem;
+}
+
+.records-filter-date::-webkit-calendar-picker-indicator {
+  margin-left: 0.16rem;
+}
+
+.records-filter-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.records-filter-select {
+  min-width: 108px;
+  cursor: pointer;
+  padding-right: 1.44rem;
+}
+
+.records-filter-select-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.26rem;
+}
+
+.records-filter-select-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-filter-select-icon {
+  width: 0.78rem;
+  height: 0.78rem;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.records-filter-select-btn.is-open .records-filter-select-icon {
+  transform: rotate(180deg);
+}
+
+.records-type-menu {
+  position: absolute;
+  left: 0;
+  right: auto;
+  top: calc(100% + 6px);
+  z-index: 31;
+  width: 100%;
+  min-width: 100%;
+  max-height: min(42vh, 280px);
+  overflow-y: auto;
+  border: 1px solid var(--menu-line);
+  border-radius: 12px;
+  background: var(--menu-bg);
+  box-shadow: 0 22px 28px -24px rgba(0, 0, 0, 1);
+  padding: 0.3rem;
+  animation: locale-pop 160ms cubic-bezier(0.18, 0.86, 0.38, 1);
+}
+
+.records-type-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.44rem;
+  color: var(--text-soft);
+  padding: 0.44rem 0.54rem;
+  min-height: 34px;
+}
+
+.records-type-option:hover {
+  background: var(--menu-hover-bg);
+  color: var(--text);
+}
+
+.records-type-option.is-active {
+  background: var(--menu-active-bg);
+  color: var(--menu-active-text);
+}
+
+.records-type-option-label {
+  font-size: 0.84rem;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-type-option-check {
+  width: 0.82rem;
+  height: 0.82rem;
+  flex-shrink: 0;
+}
+
+.records-filter-select-wrap:hover .records-filter-select-icon,
+.records-filter-field:focus-within .records-filter-select-icon {
+  color: var(--text-soft);
+}
+
 .records-list {
   display: grid;
   gap: 0.9rem;
-  padding: 0 1rem 1rem;
+  padding: 0 1rem 0.56rem;
 }
 
 .records-page {
   display: grid;
   gap: 0.9rem;
+}
+
+.records-pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 1rem 0.9rem;
+}
+
+.records-pagination {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.records-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.records-page-btn-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--text-soft);
+}
+
+.records-pagination-status {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.2;
+  min-width: 52px;
+  text-align: center;
 }
 
 .records-empty,
@@ -1059,11 +1304,11 @@ textarea:focus-visible,
 
 @media (max-width: 768px) {
   .app-root {
-    padding: 0.65rem;
+    padding: 0.56rem var(--app-side-padding-mobile) 0.65rem;
   }
 
   .app-topbar {
-    margin-bottom: 0.56rem;
+    margin-bottom: 0.5rem;
   }
 
   .locale-trigger {
@@ -1125,12 +1370,69 @@ textarea:focus-visible,
     min-width: 36px;
   }
 
+  .scroll-quick-actions {
+    right: max(
+      calc(var(--app-side-padding-mobile) + var(--scroll-quick-gap-mobile)),
+      calc(env(safe-area-inset-right) + 0.42rem)
+    );
+    bottom: max(0.96rem, calc(env(safe-area-inset-bottom) + 0.66rem));
+    gap: 0.34rem;
+  }
+
+  .scroll-quick-btn {
+    width: var(--scroll-quick-size-mobile);
+    height: var(--scroll-quick-size-mobile);
+    min-width: var(--scroll-quick-size-mobile);
+    min-height: var(--scroll-quick-size-mobile);
+  }
+
   .composer {
     padding: 0.72rem;
   }
 
   .records-list {
+    padding: 0 0.72rem 0.48rem;
+  }
+
+  .records-toolbar {
+    padding: 0.64rem 0.72rem 0;
+  }
+
+  .records-pagination-wrap {
     padding: 0 0.72rem 0.72rem;
+  }
+
+  .records-filters {
+    gap: 0.32rem;
+    padding: 0.3rem 0;
+  }
+
+  .records-filter-control {
+    max-width: min(49vw, 170px);
+  }
+
+  .records-filter-date {
+    min-width: 126px;
+    padding-right: 0.4rem;
+  }
+
+  .records-filter-select {
+    min-width: 102px;
+  }
+
+  .records-type-menu {
+    max-width: none;
+  }
+
+  .records-pagination {
+    gap: 0.34rem;
+  }
+
+  .records-page-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
   }
 
   .composer-input-row {

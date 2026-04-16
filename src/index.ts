@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 // import { parseMultipartRequest } from '@mjackson/multipart-parser';
 import {
+  countUploadRecords,
   createUploadRecord,
   deleteRecord,
   listUploadRecords,
@@ -8,6 +9,8 @@ import {
   migrateTables,
   purgeRecordsBeforeId,
   RecordFileItem,
+  RecordFilterType,
+  recordFilterTypes,
 } from "./database";
 import { H } from "hono/types";
 import { createSeekableTarball } from "./stream-tarball";
@@ -20,6 +23,9 @@ type Bindings = {
   PASSWORD: string;
 };
 
+const uploaderDeviceTypes = ['windows', 'macos', 'linux', 'ios', 'android', 'ipados', 'unknown'] as const;
+type UploaderDeviceType = (typeof uploaderDeviceTypes)[number];
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 const authWithPassword: H<{ Bindings: Bindings }> = async (c, next) => {
@@ -31,11 +37,77 @@ const authWithPassword: H<{ Bindings: Bindings }> = async (c, next) => {
   return await next();
 };
 
+function parsePositiveInt(input?: string | null) {
+  if (!input) return undefined;
+  const parsed = Number(input);
+  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
+function parseTimestamp(input?: string | null) {
+  if (!input) return undefined;
+  const parsed = Number(input);
+  if (!Number.isFinite(parsed)) return undefined;
+  return parsed;
+}
+
+function parseRecordType(input?: string | null): RecordFilterType {
+  if (!input) return "all";
+  const lowered = input.toLowerCase() as RecordFilterType;
+  if (recordFilterTypes.includes(lowered)) return lowered;
+  return "all";
+}
+
+function detectUploaderByUA(uaRaw?: string | null): UploaderDeviceType {
+  const ua = String(uaRaw || '').toLowerCase();
+  if (!ua) return 'unknown';
+
+  const isIPadOS = /ipad/.test(ua) || (/macintosh/.test(ua) && /mobile/.test(ua));
+  if (isIPadOS) return 'ipados';
+  if (/iphone|ipod/.test(ua)) return 'ios';
+  if (/android/.test(ua)) return 'android';
+  if (/windows/.test(ua)) return 'windows';
+  if (/macintosh|mac os x/.test(ua)) return 'macos';
+  if (/linux|x11/.test(ua)) return 'linux';
+  if (/mobile|tablet/.test(ua)) return 'unknown';
+  return 'unknown';
+}
+
+function normalizeUploader(rawUploader?: string | null, uaRaw?: string | null): UploaderDeviceType {
+  const raw = String(rawUploader || '').trim().toLowerCase();
+  if (raw === 'yon') return 'unknown';
+  if (!raw) return detectUploaderByUA(uaRaw);
+
+  const exact = raw as UploaderDeviceType;
+  if (uploaderDeviceTypes.includes(exact)) return exact;
+
+  if (raw.includes('windows') || raw.includes('win')) return 'windows';
+  if (raw.includes('mac') || raw.includes('osx')) return 'macos';
+  if (raw.includes('linux') || raw.includes('ubuntu') || raw.includes('debian')) return 'linux';
+  if (raw.includes('ipados') || raw.includes('ipad')) return 'ipados';
+  if (raw.includes('ios') || raw.includes('iphone') || raw.includes('ipod')) return 'ios';
+  if (raw.includes('android')) return 'android';
+  if (raw.includes('desktop') || raw.includes('pc') || raw.includes('computer')) return 'unknown';
+
+  const detected = detectUploaderByUA(uaRaw);
+  return detected;
+}
+
 app.get("/api/list", authWithPassword, async (c) => {
   await migrateTables(c.env.DB);
 
-  const beforeId = +c.req.query("beforeId")!;
-  const list = await listUploadRecords(c.env.DB, { beforeId });
+  const beforeId = parsePositiveInt(c.req.query("beforeId"));
+  const recordType = parseRecordType(c.req.query("recordType"));
+  const dateFrom = parseTimestamp(c.req.query("dateFrom"));
+  const dateTo = parseTimestamp(c.req.query("dateTo"));
+
+  const list = await listUploadRecords(c.env.DB, {
+    beforeId,
+    recordType,
+    dateFrom,
+    dateTo,
+    limit: 20,
+  });
   return c.json(list);
 
   // const r = await createUploadRecord(c.env.DB, {
@@ -47,6 +119,23 @@ app.get("/api/list", authWithPassword, async (c) => {
   // return c.json(r)
 });
 
+app.get("/api/list/count", authWithPassword, async (c) => {
+  await migrateTables(c.env.DB);
+
+  const recordType = parseRecordType(c.req.query("recordType"));
+  const dateFrom = parseTimestamp(c.req.query("dateFrom"));
+  const dateTo = parseTimestamp(c.req.query("dateTo"));
+  const pageSize = 20;
+  const total = await countUploadRecords(c.env.DB, { recordType, dateFrom, dateTo });
+  const totalPages = Math.ceil(total / pageSize);
+
+  return c.json({
+    total,
+    pageSize,
+    totalPages,
+  });
+});
+
 const timingMiddleware: H = async (c, next) => {
   const start = Date.now();
   const resp = await next();
@@ -56,7 +145,7 @@ const timingMiddleware: H = async (c, next) => {
 
 app.post("/api/upload", timingMiddleware, authWithPassword, async (c) => {
   const reqContentType = String(c.req.header('Content-Type'));
-  const uploader = c.req.header("x-uploader") || "unknown";
+  const uploader = normalizeUploader(c.req.header("x-uploader"), c.req.header("user-agent"));
   const filePathPrefix = `cf_drop/${Date.now()}`;
 
   let message = '';
