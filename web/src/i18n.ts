@@ -36,6 +36,9 @@ const zhCN = {
   'records.copyText': '复制文本',
   'records.downloadAll': '下载全部',
   'records.delete': '删除',
+  'records.previewCloseAria': '关闭图片预览',
+  'records.previewDownloadAria': '下载图片',
+  'records.previewShareAria': '复制图片链接',
 
   'password.title': '需要密码',
   'password.caption': '输入共享密码后可查看与管理上传记录。',
@@ -77,6 +80,9 @@ const en = {
   'records.copyText': 'Copy Text',
   'records.downloadAll': 'Download All',
   'records.delete': 'Delete',
+  'records.previewCloseAria': 'Close image preview',
+  'records.previewDownloadAria': 'Download image',
+  'records.previewShareAria': 'Copy image link',
 
   'password.title': 'Password required',
   'password.caption': 'Enter the shared key to unlock upload history and files.',
