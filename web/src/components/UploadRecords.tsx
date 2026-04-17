@@ -54,11 +54,16 @@ export const UploadRecords = memo(() => {
   const t = useT();
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
+  const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<RecordFilterType>('all');
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [calendarCursor, setCalendarCursor] = useState(() => dayjs().startOf('month'));
+  const dateMenuWrapRef = useRef<HTMLDivElement>(null);
+  const dateMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const typeMenuWrapRef = useRef<HTMLDivElement>(null);
   const typeMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const dateMenuId = useId();
   const typeMenuId = useId();
 
   const dateRange = useMemo(() => {
@@ -128,19 +133,28 @@ export const UploadRecords = memo(() => {
   }, [countKey, setSize]);
 
   useEffect(() => {
-    if (!typeMenuOpen) return;
+    if (!typeMenuOpen && !dateMenuOpen) return;
 
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!typeMenuWrapRef.current?.contains(target)) {
+      const clickInTypeMenu = typeMenuWrapRef.current?.contains(target);
+      const clickInDateMenu = dateMenuWrapRef.current?.contains(target);
+      if (!clickInTypeMenu && !clickInDateMenu) {
         setTypeMenuOpen(false);
+        setDateMenuOpen(false);
       }
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setTypeMenuOpen(false);
-        typeMenuTriggerRef.current?.focus();
+        if (dateMenuOpen) {
+          setDateMenuOpen(false);
+          dateMenuTriggerRef.current?.focus();
+        }
+        if (typeMenuOpen) {
+          setTypeMenuOpen(false);
+          typeMenuTriggerRef.current?.focus();
+        }
       }
     };
 
@@ -150,7 +164,7 @@ export const UploadRecords = memo(() => {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [typeMenuOpen]);
+  }, [dateMenuOpen, typeMenuOpen]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -187,10 +201,38 @@ export const UploadRecords = memo(() => {
   const totalPages = countData?.totalPages || 0;
   const visiblePage = data?.[currentPage - 1] || [];
   const displayCurrentPage = totalPages === 0 ? 0 : Math.min(currentPage, totalPages);
+  const selectedDateValue = useMemo(() => {
+    if (!selectedDate) return null;
+    const value = dayjs(selectedDate, 'YYYY-MM-DD');
+    return value.isValid() ? value : null;
+  }, [selectedDate]);
+  const dateTriggerLabel = selectedDateValue ? selectedDateValue.format('YYYY-MM-DD') : t('records.filterDateAll');
   const selectedTypeOption = useMemo(
     () => recordTypeOptions.find((item) => item.value === selectedType) || recordTypeOptions[0],
     [selectedType],
   );
+  const dateWeekLabels = locale === 'zh-CN'
+    ? ['日', '一', '二', '三', '四', '五', '六']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dateMenuMonthLabel = calendarCursor.format(locale === 'zh-CN' ? 'YYYY年M月' : 'MMMM YYYY');
+  const calendarDays = useMemo(() => {
+    const monthStart = calendarCursor.startOf('month');
+    const gridStart = monthStart.subtract(monthStart.day(), 'day');
+    return Array.from({ length: 42 }, (_, index) => {
+      const value = gridStart.add(index, 'day');
+      const isCurrentMonth = value.month() === calendarCursor.month();
+      const isToday = value.isSame(dayjs(), 'day');
+      const isSelected = selectedDateValue ? value.isSame(selectedDateValue, 'day') : false;
+      return {
+        key: value.format('YYYY-MM-DD'),
+        value,
+        day: value.date(),
+        isCurrentMonth,
+        isToday,
+        isSelected,
+      };
+    });
+  }, [calendarCursor, selectedDateValue]);
 
   useEffect(() => {
     if (!totalPages) {
@@ -215,6 +257,36 @@ export const UploadRecords = memo(() => {
       setCurrentPage(targetPage);
     });
   }, [currentPage, data, setSize, totalPages]);
+  const handleRefresh = useCallback(() => {
+    setDateMenuOpen(false);
+    setTypeMenuOpen(false);
+    setCurrentPage(1);
+    void setSize(1).then(() => {
+      void mutate();
+      void mutateCount();
+    });
+  }, [mutate, mutateCount, setSize]);
+  const toggleDateMenu = useCallback(() => {
+    setTypeMenuOpen(false);
+    setDateMenuOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        const base = selectedDateValue || dayjs();
+        setCalendarCursor(base.startOf('month'));
+      }
+      return next;
+    });
+  }, [selectedDateValue]);
+  const applyDate = useCallback((value: dayjs.Dayjs) => {
+    setSelectedDate(value.format('YYYY-MM-DD'));
+    setDateMenuOpen(false);
+    dateMenuTriggerRef.current?.focus();
+  }, []);
+  const clearDate = useCallback(() => {
+    setSelectedDate('');
+    setDateMenuOpen(false);
+    dateMenuTriggerRef.current?.focus();
+  }, []);
 
   const previewOverlay = previewImage && typeof document !== 'undefined'
     ? createPortal(
@@ -259,13 +331,69 @@ export const UploadRecords = memo(() => {
         <div className="records-filters">
           <label className="records-filter-field">
             <span className="sr-only">{t('records.filterDateAria')}</span>
-            <input
-              type="date"
-              className="records-filter-control records-filter-date"
-              value={selectedDate}
-              aria-label={t('records.filterDateAria')}
-              onChange={(event) => setSelectedDate(event.target.value)}
-            />
+            <div className="records-filter-select-wrap records-date-picker-wrap" ref={dateMenuWrapRef}>
+              <button
+                ref={dateMenuTriggerRef}
+                type="button"
+                className={`records-filter-control records-filter-date-btn ${dateMenuOpen ? 'is-open' : ''}`}
+                aria-label={t('records.filterDateAria')}
+                aria-haspopup="dialog"
+                aria-expanded={dateMenuOpen}
+                aria-controls={dateMenuId}
+                onClick={toggleDateMenu}
+              >
+                <span className={`records-filter-date-label ${selectedDateValue ? '' : 'is-placeholder'}`}>{dateTriggerLabel}</span>
+                <i className="i-lucide-calendar records-filter-date-icon" aria-hidden="true" />
+              </button>
+              {dateMenuOpen && (
+                <div id={dateMenuId} role="dialog" className="records-date-menu" aria-label={t('records.filterDateAria')}>
+                  <div className="records-date-menu-head">
+                    <button
+                      type="button"
+                      className="records-date-nav-btn"
+                      aria-label={t('records.filterDatePrevMonthAria')}
+                      onClick={() => setCalendarCursor((prev) => prev.subtract(1, 'month'))}
+                    >
+                      <i className="i-lucide-chevron-left" />
+                    </button>
+                    <div className="records-date-title">{dateMenuMonthLabel}</div>
+                    <button
+                      type="button"
+                      className="records-date-nav-btn"
+                      aria-label={t('records.filterDateNextMonthAria')}
+                      onClick={() => setCalendarCursor((prev) => prev.add(1, 'month'))}
+                    >
+                      <i className="i-lucide-chevron-right" />
+                    </button>
+                  </div>
+                  <div className="records-date-weekdays" aria-hidden="true">
+                    {dateWeekLabels.map((label) => (
+                      <span key={label} className="records-date-weekday">{label}</span>
+                    ))}
+                  </div>
+                  <div className="records-date-grid">
+                    {calendarDays.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`records-date-cell ${item.isCurrentMonth ? '' : 'is-outside'} ${item.isToday ? 'is-today' : ''} ${item.isSelected ? 'is-selected' : ''}`}
+                        onClick={() => applyDate(item.value)}
+                      >
+                        <span>{item.day}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="records-date-actions">
+                    <button type="button" className="records-date-action" onClick={clearDate}>
+                      {t('records.filterDateClear')}
+                    </button>
+                    <button type="button" className="records-date-action is-primary" onClick={() => applyDate(dayjs())}>
+                      {t('records.filterDateToday')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </label>
           <label className="records-filter-field">
             <span className="sr-only">{t('records.filterTypeAria')}</span>
@@ -278,7 +406,10 @@ export const UploadRecords = memo(() => {
                 aria-haspopup="listbox"
                 aria-expanded={typeMenuOpen}
                 aria-controls={typeMenuId}
-                onClick={() => setTypeMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  setDateMenuOpen(false);
+                  setTypeMenuOpen((prev) => !prev);
+                }}
               >
                 <span className="records-filter-select-label">{t(selectedTypeOption.labelKey)}</span>
                 <i className="i-lucide-chevron-down records-filter-select-icon" aria-hidden="true" />
@@ -307,6 +438,15 @@ export const UploadRecords = memo(() => {
             </div>
           </label>
         </div>
+        <button
+          type="button"
+          className="records-refresh-btn"
+          aria-label={t('records.refreshAria')}
+          title={t('records.refreshAria')}
+          onClick={handleRefresh}
+        >
+          <i className="i-lucide-refresh-cw records-refresh-icon" />
+        </button>
       </div>
       <div className="records-list">
         {error && (
@@ -360,12 +500,38 @@ export const UploadRecords = memo(() => {
 const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (src: string, name: string) => void }) => {
   const t = useT();
   const files = useMemo(() => props.record.files || [], [props.record.files]);
+  const [openFileMenuKey, setOpenFileMenuKey] = useState<string | null>(null);
+  const openFileMenuRef = useRef<HTMLDivElement>(null);
   const uploaderType = normalizeUploaderType(props.record.uploader);
   const uploaderLabel = t(uploaderDeviceLabelKeys[uploaderType]);
   const uploaderIcon = uploaderDeviceIcons[uploaderType];
   const recordTime = formatRecordTime(props.record.ctime, t);
 
   const actionLink = 'record-action';
+
+  useEffect(() => {
+    if (!openFileMenuKey) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!openFileMenuRef.current?.contains(target)) {
+        setOpenFileMenuKey(null);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenFileMenuKey(null);
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openFileMenuKey]);
 
   const meta = <div className="record-meta">
     <span title={uploaderLabel}>
@@ -431,6 +597,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (s
                 const link = `/api/download/${props.record.slug}/${index}`;
                 const fileExt = getFileExt(file.name);
                 const canPreviewImage = Boolean(file.thumbnail);
+                const menuKey = `${props.record.id}-${index}`;
                 return (
                   <div key={file.path} className="record-file-item">
                     <a
@@ -439,6 +606,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (s
                       rel={canPreviewImage ? undefined : 'noreferrer'}
                       title={file.name}
                       className="record-file"
+                      onMouseDown={() => setOpenFileMenuKey(null)}
                       onClick={canPreviewImage
                         ? (event) => {
                           event.preventDefault();
@@ -472,6 +640,50 @@ const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (s
                         </>
                       )}
                     </a>
+                    <button
+                      ref={openFileMenuKey === menuKey ? openFileMenuRef : undefined}
+                      type="button"
+                      className={`record-file-menu-trigger ${openFileMenuKey === menuKey ? 'is-open' : ''}`}
+                      aria-label={t('records.fileActionMenuAria')}
+                      title={t('records.fileActionMenuAria')}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setOpenFileMenuKey((prev) => (prev === menuKey ? null : menuKey));
+                      }}
+                    >
+                      <i className="i-lucide-ellipsis-vertical" />
+                    </button>
+                    {openFileMenuKey === menuKey && (
+                      <div className="record-file-menu" role="menu">
+                        <a
+                          href={link}
+                          download={file.name}
+                          className="record-file-menu-item"
+                          role="menuitem"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenFileMenuKey(null);
+                          }}
+                        >
+                          {t('records.fileActionDownload')}
+                        </a>
+                        <button
+                          type="button"
+                          className="record-file-menu-item"
+                          role="menuitem"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setOpenFileMenuKey(null);
+                            const absoluteUrl = new URL(link, window.location.origin).toString();
+                            void copyToClipboard(absoluteUrl);
+                          }}
+                        >
+                          {t('records.fileActionShare')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

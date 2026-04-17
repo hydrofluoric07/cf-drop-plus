@@ -339,7 +339,17 @@ app.get("/api/download/:slug/tarball", async (c) => {
   return c.body(reader.stream);
 })
 
-const RE_ASSET_SUFFIX = /\.(jpg|png|gif|avif|mp4|mov|txt|html|js|css|json|ya?ml)/;
+const RE_ASSET_SUFFIX = /\.(jpg|jpeg|png|gif|webp|avif|mp4|mov|txt|html|js|css|json|ya?ml)$/;
+function buildContentDisposition(dispositionType: "inline" | "attachment", filename: string) {
+  const fallbackName = "file";
+  const safeFilename = String(filename || fallbackName)
+    .replace(/\r|\n/g, " ")
+    .replace(/[\\"]/g, "\\$&");
+  const encodedFilename = encodeURIComponent(filename || fallbackName)
+    .replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${dispositionType}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`;
+}
+
 app.get("/api/download/:slug/:index", async (c) => {
   const slug = c.req.param("slug");
   const index = c.req.param("index");
@@ -348,7 +358,8 @@ app.get("/api/download/:slug/:index", async (c) => {
     return c.status(404);
   }
 
-  const filePath = record.files[+index]?.path;
+  const file = record.files[+index];
+  const filePath = file?.path;
   if (!filePath) {
     return c.status(404);
   }
@@ -363,6 +374,9 @@ app.get("/api/download/:slug/:index", async (c) => {
   }
 
   const basename = filePath.split("/").pop()!.replace(/\?.*/, "");
+  const originalName = String(file?.name || "").replace(/\?.*/, "");
+  const downloadName = (originalName || basename).split(/[\\/]/).pop() || "file";
+  const lowerName = downloadName.toLowerCase();
   const headers = new Headers();
 
   r.writeHttpMetadata(headers);
@@ -372,7 +386,8 @@ app.get("/api/download/:slug/:index", async (c) => {
   }
   headers.set("accept-ranges", "bytes");
 
-  if (!RE_ASSET_SUFFIX.test(basename)) headers.set("content-disposition", `attachment; filename="${basename}"`);
+  const dispositionType = RE_ASSET_SUFFIX.test(lowerName) ? "inline" : "attachment";
+  headers.set("content-disposition", buildContentDisposition(dispositionType, downloadName));
   headers.forEach((value, key) => c.header(key, value));
   return c.body(r.body)
 });
