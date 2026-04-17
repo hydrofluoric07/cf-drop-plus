@@ -13,6 +13,8 @@ export const ContentInput = memo(() => {
   const [text, setText] = useAtom(inputTextAtom);
   const t = useT();
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const dragDepthRef = useRef(0);
+  const hideDragMaskTimerRef = useRef<number | null>(null);
 
   const [isDragOver, setIsDragOver] = useState(false);
   useEffect(() => {
@@ -45,52 +47,80 @@ export const ContentInput = memo(() => {
       e.stopPropagation();
     };
 
-    const handleDragOver = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.some((type) => type === 'Files')) return;
+    const clearHideDragMaskTimer = () => {
+      if (hideDragMaskTimerRef.current === null) return;
+      window.clearTimeout(hideDragMaskTimerRef.current);
+      hideDragMaskTimerRef.current = null;
+    };
 
-      e.preventDefault();
-      e.stopPropagation();
+    const isFilesDrag = (event: DragEvent) => Boolean(event.dataTransfer?.types?.includes('Files'));
 
+    const showDragMask = () => {
+      clearHideDragMaskTimer();
       setIsDragOver(true);
     };
 
-    window.addEventListener('paste', handlePaste, true);
-    window.addEventListener('dragover', handleDragOver, true);
-
-    return () => {
-      window.removeEventListener('paste', handlePaste, true);
-      window.removeEventListener('dragover', handleDragOver, true);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isDragOver) {
-      document.body.style.pointerEvents = 'auto';
-      return;
-    }
-
-    document.body.style.pointerEvents = 'none';
-
-    const handleDragLeave = () => {
+    const hideDragMask = () => {
+      clearHideDragMaskTimer();
       setIsDragOver(false);
+      dragDepthRef.current = 0;
     };
 
-    const handleDrop = (e: DragEvent) => {
-      setIsDragOver(false);
+    const handleDragEnter = (e: DragEvent) => {
+      if (!isFilesDrag(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepthRef.current += 1;
+      showDragMask();
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (!isFilesDrag(e)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      showDragMask();
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (!isFilesDrag(e)) return;
       e.preventDefault();
       e.stopPropagation();
 
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current > 0) return;
+
+      clearHideDragMaskTimer();
+      hideDragMaskTimerRef.current = window.setTimeout(() => {
+        hideDragMask();
+      }, 50);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      if (!isFilesDrag(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      hideDragMask();
       getFilesFromDataTransfer(e.dataTransfer).then((droppedFiles) => addFiles(droppedFiles));
     };
 
-    window.addEventListener('drop', handleDrop, true);
+    window.addEventListener('paste', handlePaste, true);
+    window.addEventListener('dragenter', handleDragEnter, true);
+    window.addEventListener('dragover', handleDragOver, true);
     window.addEventListener('dragleave', handleDragLeave, true);
+    window.addEventListener('drop', handleDrop, true);
 
     return () => {
-      window.removeEventListener('drop', handleDrop, true);
+      clearHideDragMaskTimer();
+      hideDragMask();
+      window.removeEventListener('paste', handlePaste, true);
+      window.removeEventListener('dragenter', handleDragEnter, true);
+      window.removeEventListener('dragover', handleDragOver, true);
       window.removeEventListener('dragleave', handleDragLeave, true);
+      window.removeEventListener('drop', handleDrop, true);
     };
-  }, [isDragOver]);
+  }, []);
 
   const handleTextChange = useConsistCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
