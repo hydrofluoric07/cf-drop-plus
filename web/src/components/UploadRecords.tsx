@@ -22,6 +22,21 @@ const recordTypeOptions: Array<{ value: RecordFilterType; labelKey: 'records.fil
 ];
 
 type UploaderDeviceType = 'windows' | 'macos' | 'linux' | 'ios' | 'android' | 'ipados' | 'unknown';
+type FileMenuPlacement = 'top' | 'bottom';
+
+interface OpenFileMenuState {
+  key: string;
+  link: string;
+  fileName: string;
+  top: number;
+  left: number;
+  placement: FileMenuPlacement;
+}
+
+const FILE_MENU_WIDTH = 120;
+const FILE_MENU_ESTIMATED_HEIGHT = 92;
+const FILE_MENU_GAP = 6;
+const FILE_MENU_VIEWPORT_PADDING = 8;
 
 const uploaderDeviceLabelKeys: Record<UploaderDeviceType, TranslationKey> = {
   windows: 'records.deviceWindows',
@@ -500,38 +515,70 @@ export const UploadRecords = memo(() => {
 const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (src: string, name: string) => void }) => {
   const t = useT();
   const files = useMemo(() => props.record.files || [], [props.record.files]);
-  const [openFileMenuKey, setOpenFileMenuKey] = useState<string | null>(null);
+  const [openFileMenu, setOpenFileMenu] = useState<OpenFileMenuState | null>(null);
   const openFileMenuRef = useRef<HTMLDivElement>(null);
+  const openFileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const uploaderType = normalizeUploaderType(props.record.uploader);
   const uploaderLabel = t(uploaderDeviceLabelKeys[uploaderType]);
   const uploaderIcon = uploaderDeviceIcons[uploaderType];
   const recordTime = formatRecordTime(props.record.ctime, t);
 
   const actionLink = 'record-action';
+  const resolveFileMenuPosition = useCallback((triggerRect: DOMRect) => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = triggerRect.right - FILE_MENU_WIDTH;
+    left = Math.max(
+      FILE_MENU_VIEWPORT_PADDING,
+      Math.min(left, viewportWidth - FILE_MENU_WIDTH - FILE_MENU_VIEWPORT_PADDING),
+    );
+
+    const fitsBottom = triggerRect.bottom + FILE_MENU_GAP + FILE_MENU_ESTIMATED_HEIGHT <= viewportHeight - FILE_MENU_VIEWPORT_PADDING;
+    const placement: FileMenuPlacement = fitsBottom ? 'bottom' : 'top';
+
+    let top = placement === 'bottom'
+      ? triggerRect.bottom + FILE_MENU_GAP
+      : triggerRect.top - FILE_MENU_GAP - FILE_MENU_ESTIMATED_HEIGHT;
+    top = Math.max(
+      FILE_MENU_VIEWPORT_PADDING,
+      Math.min(top, viewportHeight - FILE_MENU_ESTIMATED_HEIGHT - FILE_MENU_VIEWPORT_PADDING),
+    );
+
+    return { top, left, placement };
+  }, []);
 
   useEffect(() => {
-    if (!openFileMenuKey) return;
+    if (!openFileMenu) return;
 
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!openFileMenuRef.current?.contains(target)) {
-        setOpenFileMenuKey(null);
-      }
+      if (openFileMenuRef.current?.contains(target)) return;
+      if (openFileMenuTriggerRef.current?.contains(target)) return;
+      setOpenFileMenu(null);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setOpenFileMenuKey(null);
+        setOpenFileMenu(null);
       }
+    };
+
+    const onViewportChange = () => {
+      setOpenFileMenu(null);
     };
 
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
     };
-  }, [openFileMenuKey]);
+  }, [openFileMenu]);
 
   const meta = <div className="record-meta">
     <span title={uploaderLabel}>
@@ -582,118 +629,143 @@ const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (s
       </a>
     </PopoverConfirm>
   </div>;
+  const fileMenuOverlay = openFileMenu && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={openFileMenuRef}
+        className={`record-file-menu record-file-menu-floating is-${openFileMenu.placement}`}
+        role="menu"
+        style={{ top: `${openFileMenu.top}px`, left: `${openFileMenu.left}px` }}
+      >
+        <a
+          href={openFileMenu.link}
+          download={openFileMenu.fileName}
+          className="record-file-menu-item"
+          role="menuitem"
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpenFileMenu(null);
+          }}
+        >
+          {t('records.fileActionDownload')}
+        </a>
+        <button
+          type="button"
+          className="record-file-menu-item"
+          role="menuitem"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpenFileMenu(null);
+            const absoluteUrl = new URL(openFileMenu.link, window.location.origin).toString();
+            void copyToClipboard(absoluteUrl);
+          }}
+        >
+          {t('records.fileActionShare')}
+        </button>
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
-    <article className="record-card">
-      <div className="record-main">
-        <div className="record-fixed">
-          {meta}
-        </div>
-        <div className="record-scroll withScrollbar">
-          {!!props.record.message && <pre className="record-message">{props.record.message}</pre>}
-          {files.length > 0 && (
-            <div className="record-files">
-              {files.map((file, index) => {
-                const link = `/api/download/${props.record.slug}/${index}`;
-                const fileExt = getFileExt(file.name);
-                const canPreviewImage = Boolean(file.thumbnail);
-                const menuKey = `${props.record.id}-${index}`;
-                return (
-                  <div key={file.path} className="record-file-item">
-                    <a
-                      href={link}
-                      target={canPreviewImage ? undefined : '_blank'}
-                      rel={canPreviewImage ? undefined : 'noreferrer'}
-                      title={file.name}
-                      className="record-file"
-                      onMouseDown={() => setOpenFileMenuKey(null)}
-                      onClick={canPreviewImage
-                        ? (event) => {
-                          event.preventDefault();
-                          props.onPreviewImage(link, file.name);
-                        }
-                        : undefined}
-                    >
-                      {file.thumbnail ? (
-                        <>
-                          <img src={file.thumbnail} className="record-file-thumb" />
-                          <div className="record-file-info">
-                            <div className="record-file-name">{file.name}</div>
-                            <div className="record-file-size-row">
-                              {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
-                              <span className="record-file-size">{toReadableSize(file.size)}</span>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="record-file-icon-wrap" aria-hidden="true">
-                            <i className="i-lucide-file record-file-icon"></i>
-                          </div>
-                          <div className="record-file-info">
-                            <div className="record-file-name">{file.name}</div>
-                            <div className="record-file-size-row">
-                              {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
-                              <span className="record-file-size">{toReadableSize(file.size)}</span>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </a>
-                    <button
-                      ref={openFileMenuKey === menuKey ? openFileMenuRef : undefined}
-                      type="button"
-                      className={`record-file-menu-trigger ${openFileMenuKey === menuKey ? 'is-open' : ''}`}
-                      aria-label={t('records.fileActionMenuAria')}
-                      title={t('records.fileActionMenuAria')}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setOpenFileMenuKey((prev) => (prev === menuKey ? null : menuKey));
-                      }}
-                    >
-                      <i className="i-lucide-ellipsis-vertical" />
-                    </button>
-                    {openFileMenuKey === menuKey && (
-                      <div className="record-file-menu" role="menu">
-                        <a
-                          href={link}
-                          download={file.name}
-                          className="record-file-menu-item"
-                          role="menuitem"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setOpenFileMenuKey(null);
-                          }}
-                        >
-                          {t('records.fileActionDownload')}
-                        </a>
-                        <button
-                          type="button"
-                          className="record-file-menu-item"
-                          role="menuitem"
-                          onClick={(event) => {
+    <>
+      <article className="record-card">
+        <div className="record-main">
+          <div className="record-fixed">
+            {meta}
+          </div>
+          <div className="record-scroll withScrollbar">
+            {!!props.record.message && <pre className="record-message">{props.record.message}</pre>}
+            {files.length > 0 && (
+              <div className="record-files">
+                {files.map((file, index) => {
+                  const link = `/api/download/${props.record.slug}/${index}`;
+                  const fileExt = getFileExt(file.name);
+                  const canPreviewImage = Boolean(file.thumbnail);
+                  const menuKey = `${props.record.id}-${index}`;
+                  const isMenuOpen = openFileMenu?.key === menuKey;
+                  return (
+                    <div key={file.path} className="record-file-item">
+                      <a
+                        href={link}
+                        target={canPreviewImage ? undefined : '_blank'}
+                        rel={canPreviewImage ? undefined : 'noreferrer'}
+                        title={file.name}
+                        className="record-file"
+                        onMouseDown={() => setOpenFileMenu(null)}
+                        onClick={canPreviewImage
+                          ? (event) => {
                             event.preventDefault();
-                            event.stopPropagation();
-                            setOpenFileMenuKey(null);
-                            const absoluteUrl = new URL(link, window.location.origin).toString();
-                            void copyToClipboard(absoluteUrl);
-                          }}
-                        >
-                          {t('records.fileActionShare')}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                            props.onPreviewImage(link, file.name);
+                          }
+                          : undefined}
+                      >
+                        {file.thumbnail ? (
+                          <>
+                            <img src={file.thumbnail} className="record-file-thumb" />
+                            <div className="record-file-info">
+                              <div className="record-file-name">{file.name}</div>
+                              <div className="record-file-size-row">
+                                {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
+                                <span className="record-file-size">{toReadableSize(file.size)}</span>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="record-file-icon-wrap" aria-hidden="true">
+                              <i className="i-lucide-file record-file-icon"></i>
+                            </div>
+                            <div className="record-file-info">
+                              <div className="record-file-name">{file.name}</div>
+                              <div className="record-file-size-row">
+                                {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
+                                <span className="record-file-size">{toReadableSize(file.size)}</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </a>
+                      <button
+                        ref={isMenuOpen ? openFileMenuTriggerRef : undefined}
+                        type="button"
+                        className={`record-file-menu-trigger ${isMenuOpen ? 'is-open' : ''}`}
+                        aria-label={t('records.fileActionMenuAria')}
+                        title={t('records.fileActionMenuAria')}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (isMenuOpen) {
+                            setOpenFileMenu(null);
+                            return;
+                          }
+                          const triggerRect = event.currentTarget.getBoundingClientRect();
+                          const { top, left, placement } = resolveFileMenuPosition(triggerRect);
+                          setOpenFileMenu({
+                            key: menuKey,
+                            link,
+                            fileName: file.name,
+                            top,
+                            left,
+                            placement,
+                          });
+                        }}
+                      >
+                        <i className="i-lucide-ellipsis-vertical" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {actions}
-    </article>
+        {actions}
+      </article>
+      {fileMenuOverlay}
+    </>
   );
 });
 
