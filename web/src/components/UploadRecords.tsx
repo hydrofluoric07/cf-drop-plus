@@ -74,6 +74,7 @@ export const UploadRecords = memo(() => {
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [calendarCursor, setCalendarCursor] = useState(() => dayjs().startOf('month'));
+  const hasCountKeyMountedRef = useRef(false);
   const dateMenuWrapRef = useRef<HTMLDivElement>(null);
   const dateMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const typeMenuWrapRef = useRef<HTMLDivElement>(null);
@@ -109,6 +110,10 @@ export const UploadRecords = memo(() => {
   const { data: countData, mutate: mutateCount } = useSWR(
     countKey,
     (url: string) => fetchAPI(url).then((res) => res.json() as Promise<RecordCountResponse>),
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
   );
 
   // all records. newest first
@@ -127,22 +132,42 @@ export const UploadRecords = memo(() => {
       return query ? `/api/list?${query}` : '/api/list';
     },
     (url: string) => fetchAPI(url).then((res) => res.json() as Promise<UploadRecord[]>),
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
   );
 
   useEffect(() => {
     dayjs.locale(locale === 'zh-CN' ? 'zh-cn' : 'en');
   }, [locale]);
 
+  const refreshRecords = useCallback(async () => {
+    setCurrentPage(1);
+    const loadedPages = data?.length ?? 0;
+    if (loadedPages > 1) {
+      await setSize(1);
+    } else {
+      await mutate(undefined, {
+        revalidate: (_pageData, pageKey) => typeof pageKey === 'string' && !pageKey.includes('beforeId='),
+      });
+    }
+    await mutateCount();
+  }, [data?.length, mutate, mutateCount, setSize]);
+
   useEffect(() => {
     const refresh = () => {
-      mutate();
-      mutateCount();
+      void refreshRecords();
     };
     window.addEventListener('records-updated', refresh);
     return () => window.removeEventListener('records-updated', refresh);
-  }, [mutate, mutateCount]);
+  }, [refreshRecords]);
 
   useEffect(() => {
+    if (!hasCountKeyMountedRef.current) {
+      hasCountKeyMountedRef.current = true;
+      return;
+    }
     setCurrentPage(1);
     void setSize(1);
   }, [countKey, setSize]);
@@ -275,12 +300,8 @@ export const UploadRecords = memo(() => {
   const handleRefresh = useCallback(() => {
     setDateMenuOpen(false);
     setTypeMenuOpen(false);
-    setCurrentPage(1);
-    void setSize(1).then(() => {
-      void mutate();
-      void mutateCount();
-    });
-  }, [mutate, mutateCount, setSize]);
+    void refreshRecords();
+  }, [refreshRecords]);
   const toggleDateMenu = useCallback(() => {
     setTypeMenuOpen(false);
     setDateMenuOpen((prev) => {
