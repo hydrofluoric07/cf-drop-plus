@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import useSWRInfinite from 'swr/infinite';
 import useSWR from 'swr';
 import dayjs from 'dayjs';
+import Linkify from 'linkify-react';
 import 'dayjs/locale/zh-cn';
 
 import type { RecordFilterType, UploadRecord } from '../../../src/database';
@@ -39,6 +40,12 @@ const FILE_MENU_ESTIMATED_HEIGHT = 92;
 const FILE_MENU_GAP = 6;
 const FILE_MENU_VIEWPORT_PADDING = 8;
 const PAGE_SIZE_FALLBACK = 20;
+const messageLinkifyOptions = {
+  className: 'record-message-link',
+  target: '_blank',
+  rel: 'noopener noreferrer',
+  validate: (value: string, type: string) => type === 'url' && /^https?:\/\//i.test(value),
+};
 
 const IMAGE_FILE_EXTS = new Set([
   'jpg',
@@ -862,7 +869,13 @@ const UploadRecordItem = memo((props: {
             {meta}
           </div>
           <div className="record-scroll withScrollbar">
-            {!!props.record.message && <pre className="record-message">{props.record.message}</pre>}
+            {!!props.record.message && (
+              <pre className="record-message">
+                <Linkify options={messageLinkifyOptions}>
+                  {props.record.message}
+                </Linkify>
+              </pre>
+            )}
             {files.length > 0 && (
               <div className="record-files">
                 {files.map((file, index) => {

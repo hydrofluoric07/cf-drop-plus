@@ -12,6 +12,18 @@ export async function migrateTables(db: D1Database) {
     )
   `.replace(/\n/g, "")
   );
+
+  await db.exec(
+    `
+    CREATE TABLE IF NOT EXISTS auth_guard (
+      key_hash TEXT PRIMARY KEY,
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      first_fail_at INTEGER NOT NULL,
+      blocked_until INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `.replace(/\n/g, "")
+  );
 }
 
 export interface UploadRecord {

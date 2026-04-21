@@ -1,5 +1,5 @@
 :root {
-  --bg: #f7f6f3;
+  --bg: #f2f5f3;
   --surface: #ffffff;
   --surface-soft: #f8f7f3;
   --line: #d8d6ce;
@@ -74,6 +74,7 @@ body {
   gap: 0.5rem;
   width: 100%;
   padding: 0.42rem;
+  background: var(--bg);
 }
 
 .popup-title-wrap {

@@ -287,6 +287,14 @@ async function requestJson(url, init) {
   }
 
   if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterRaw = response.headers.get('Retry-After');
+      const retryAfterSeconds = Number.parseInt(String(retryAfterRaw || ''), 10);
+      if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+        throw new Error(`尝试过多，请 ${retryAfterSeconds} 秒后重试`);
+      }
+      throw new Error('尝试过多，请稍后重试');
+    }
     if (response.status === 401) {
       throw new Error('密码错误或未授权');
     }

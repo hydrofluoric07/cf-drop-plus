@@ -88,6 +88,8 @@ const zhCN = {
   'errors.noContent': '没有可上传的文件或文本',
   'errors.uploadFailed': '上传失败',
   'errors.passwordRequired': '需要密码',
+  'errors.tooManyAttempts': '尝试过于频繁，请稍后重试',
+  'errors.tooManyAttemptsWithRetry': '尝试过于频繁，请 {seconds} 秒后重试',
   'errors.unknown': '发生未知错误',
 } as const;
 
@@ -168,6 +170,8 @@ const en = {
   'errors.noContent': 'No files or text to upload',
   'errors.uploadFailed': 'Upload failed',
   'errors.passwordRequired': 'Password required',
+  'errors.tooManyAttempts': 'Too many attempts, please try again later',
+  'errors.tooManyAttemptsWithRetry': 'Too many attempts, try again in {seconds}s',
   'errors.unknown': 'Unknown error',
 } as const;
 
@@ -183,6 +187,7 @@ const errorCodeMap: Record<string, TranslationKey> = {
   'error.noContent': 'errors.noContent',
   'error.uploadFailed': 'errors.uploadFailed',
   'error.passwordRequired': 'errors.passwordRequired',
+  'error.tooManyAttempts': 'errors.tooManyAttempts',
   'error.unknown': 'errors.unknown',
   'No files or text': 'errors.noContent',
   'Upload failed': 'errors.uploadFailed',
@@ -269,6 +274,14 @@ export function tError(locale: Locale, rawError?: string | null) {
   const normalized = rawError.startsWith('Error: ')
     ? rawError.slice('Error: '.length)
     : rawError;
+  if (normalized.startsWith('error.tooManyAttempts:')) {
+    const seconds = Number.parseInt(normalized.slice('error.tooManyAttempts:'.length), 10);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return t(locale, 'errors.tooManyAttemptsWithRetry', { seconds });
+    }
+    return t(locale, 'errors.tooManyAttempts');
+  }
+
   const mappedKey = errorCodeMap[normalized];
   if (mappedKey) return t(locale, mappedKey);
   return normalized;

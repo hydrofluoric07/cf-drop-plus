@@ -25,6 +25,15 @@ export async function fetchAPI(input: RequestInfo | URL, init?: RequestInit) {
   }
 
   const res = await fetch(input, init);
+  if (res.status === 429) {
+    const retryAfterRaw = res.headers.get('Retry-After');
+    const retryAfterSeconds = Number.parseInt(String(retryAfterRaw || ''), 10);
+    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+      throw new Error(`error.tooManyAttempts:${retryAfterSeconds}`);
+    }
+    throw new Error('error.tooManyAttempts');
+  }
+
   if (res.status === 401) {
     store.set(passwordInvalidAtom, true);
     throw new Error('error.passwordRequired');

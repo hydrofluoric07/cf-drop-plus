@@ -6,8 +6,8 @@
   --scroll-quick-size-mobile: 32px;
   --scroll-quick-gap-desktop: 6px;
   --scroll-quick-gap-mobile: 4px;
-  --bg: #f7f6f3;
-  --bg-shade: #f7f6f3;
+  --bg: #f2f5f3;
+  --bg-shade: #f2f5f3;
   --surface: #ffffff;
   --surface-soft: #f8f7f3;
   --surface-hover: #f1efe9;
@@ -1263,6 +1263,25 @@ textarea:focus-visible,
   overflow-wrap: anywhere;
   word-break: break-word;
   color: var(--text);
+}
+
+.record-message-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.record-message-link:hover {
+  color: var(--text);
+}
+
+.record-message-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 28%, transparent);
+  border-radius: 4px;
 }
 
 .record-files {

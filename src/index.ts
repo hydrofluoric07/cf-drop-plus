@@ -27,14 +27,138 @@ const uploaderDeviceTypes = ['windows', 'macos', 'linux', 'ios', 'android', 'ipa
 type UploaderDeviceType = (typeof uploaderDeviceTypes)[number];
 
 const app = new Hono<{ Bindings: Bindings }>();
+const FILE_DOWNLOAD_CACHE_CONTROL = "public, max-age=120, s-maxage=600, stale-while-revalidate=300";
+const RANGE_DOWNLOAD_CACHE_CONTROL = "no-store";
+const PROTECTED_ROUTE_CACHE_CONTROL = "no-store";
+const AUTH_FAIL_WINDOW_MS = 10 * 60 * 1000;
+const AUTH_FAIL_BLOCK_THRESHOLD = 5;
+const AUTH_FAIL_BLOCK_STEPS_MS = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000] as const;
+
+interface AuthGuardRow {
+  key_hash: string;
+  fail_count: number;
+  first_fail_at: number;
+  blocked_until: number;
+  updated_at: number;
+}
+
+function timingSafeEqualString(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const leftBytes = encoder.encode(left);
+  const rightBytes = encoder.encode(right);
+  const maxLength = Math.max(leftBytes.length, rightBytes.length);
+
+  let diff = leftBytes.length ^ rightBytes.length;
+  for (let index = 0; index < maxLength; index++) {
+    diff |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+  return diff === 0;
+}
+
+async function sha256Hex(input: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest), (item) => item.toString(16).padStart(2, "0")).join("");
+}
+
+async function buildAuthGuardKeyHash(c: { req: { header: (name: string) => string | undefined } }) {
+  const forwarded = String(c.req.header("x-forwarded-for") || "");
+  const forwardedIp = forwarded.split(",")[0]?.trim();
+  const ip = String(c.req.header("cf-connecting-ip") || forwardedIp || "unknown");
+  const ua = String(c.req.header("user-agent") || "unknown");
+  return sha256Hex(`${ip}|${ua}`);
+}
+
+async function getAuthGuard(db: D1Database, keyHash: string) {
+  const row = await db.prepare(
+    "SELECT key_hash, fail_count, first_fail_at, blocked_until, updated_at FROM auth_guard WHERE key_hash = ?"
+  ).bind(keyHash).first<AuthGuardRow>();
+  if (!row) return null;
+
+  return {
+    keyHash: String(row.key_hash),
+    failCount: Number(row.fail_count || 0),
+    firstFailAt: Number(row.first_fail_at || 0),
+    blockedUntil: Number(row.blocked_until || 0),
+    updatedAt: Number(row.updated_at || 0),
+  };
+}
+
+function resolveBlockDurationMs(failCount: number) {
+  if (failCount < AUTH_FAIL_BLOCK_THRESHOLD) return 0;
+  const level = Math.min(failCount - AUTH_FAIL_BLOCK_THRESHOLD, AUTH_FAIL_BLOCK_STEPS_MS.length - 1);
+  return AUTH_FAIL_BLOCK_STEPS_MS[level];
+}
+
+async function recordAuthFailure(
+  db: D1Database,
+  keyHash: string,
+  now: number,
+  prevGuard: Awaited<ReturnType<typeof getAuthGuard>>
+) {
+  const hasRecentFailures = Boolean(prevGuard && now - prevGuard.firstFailAt <= AUTH_FAIL_WINDOW_MS);
+  const failCount = hasRecentFailures ? prevGuard!.failCount + 1 : 1;
+  const firstFailAt = hasRecentFailures ? prevGuard!.firstFailAt : now;
+  const blockedUntil = (() => {
+    const durationMs = resolveBlockDurationMs(failCount);
+    if (!durationMs) return 0;
+    return now + durationMs;
+  })();
+
+  await db.prepare(
+    `INSERT INTO auth_guard (key_hash, fail_count, first_fail_at, blocked_until, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(key_hash) DO UPDATE SET
+       fail_count = excluded.fail_count,
+       first_fail_at = excluded.first_fail_at,
+       blocked_until = excluded.blocked_until,
+       updated_at = excluded.updated_at`
+  ).bind(keyHash, failCount, firstFailAt, blockedUntil, now).run();
+
+  return blockedUntil;
+}
+
+async function clearAuthFailure(db: D1Database, keyHash: string) {
+  await db.prepare("DELETE FROM auth_guard WHERE key_hash = ?").bind(keyHash).run();
+}
 
 const authWithPassword: H<{ Bindings: Bindings }> = async (c, next) => {
-  if (c.env.PASSWORD && c.req.header("x-password") !== c.env.PASSWORD) {
+  await migrateTables(c.env.DB);
+
+  const expectedPassword = String(c.env.PASSWORD || "");
+  const inputPassword = String(c.req.header("x-password") || "");
+  if (!expectedPassword) {
+    c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
     c.status(401);
-    return c.json({ error: "Password required" });
+    return c.json({ error: "Unauthorized" });
   }
 
-  return await next();
+  const now = Date.now();
+  const guardKeyHash = await buildAuthGuardKeyHash(c);
+  const guard = await getAuthGuard(c.env.DB, guardKeyHash);
+  if (guard && guard.blockedUntil > now) {
+    const retryAfter = Math.max(1, Math.ceil((guard.blockedUntil - now) / 1000));
+    c.header("Retry-After", String(retryAfter));
+    c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
+    c.status(429);
+    return c.json({ error: "Too many attempts" });
+  }
+
+  if (!timingSafeEqualString(inputPassword, expectedPassword)) {
+    const blockedUntil = await recordAuthFailure(c.env.DB, guardKeyHash, now, guard);
+    c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
+    if (blockedUntil > now) {
+      const retryAfter = Math.max(1, Math.ceil((blockedUntil - now) / 1000));
+      c.header("Retry-After", String(retryAfter));
+      c.status(429);
+      return c.json({ error: "Too many attempts" });
+    }
+    c.status(401);
+    return c.json({ error: "Unauthorized" });
+  }
+
+  await clearAuthFailure(c.env.DB, guardKeyHash);
+  await next();
+  c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
 };
 
 function parsePositiveInt(input?: string | null) {
@@ -350,6 +474,32 @@ function buildContentDisposition(dispositionType: "inline" | "attachment", filen
   return `${dispositionType}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`;
 }
 
+function buildDownloadEtag(slug: string, index: string, size: number, ctime: number) {
+  return `"${slug}-${index}-${size}-${ctime}"`;
+}
+
+function isIfNoneMatchMatched(ifNoneMatch: string | undefined, etag: string) {
+  if (!ifNoneMatch) return false;
+
+  return ifNoneMatch
+    .split(",")
+    .map((token) => token.trim())
+    .some((token) => token === "*" || token === etag || token === `W/${etag}`);
+}
+
+function resolveStaticCacheControl(pathname: string) {
+  if (pathname === "/" || pathname === "/index.html") {
+    return "no-cache";
+  }
+  if (pathname === "/sw.js") {
+    return "no-cache";
+  }
+  if (pathname.startsWith("/static/")) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "";
+}
+
 app.get("/api/download/:slug/:index", async (c) => {
   const slug = c.req.param("slug");
   const index = c.req.param("index");
@@ -363,33 +513,67 @@ app.get("/api/download/:slug/:index", async (c) => {
   if (!filePath) {
     return c.status(404);
   }
+  const reqRange = c.req.header("Range");
 
-  const r = await c.env.MY_BUCKET.get(filePath, {
-    range: c.req.raw.headers
-  });
+  const basename = filePath.split("/").pop()!.replace(/\?.*/, "");
+  const originalName = String(file?.name || "").replace(/\?.*/, "");
+  const downloadName = (originalName || basename).split(/[\\/]/).pop() || "file";
+  const lowerName = downloadName.toLowerCase();
+  const etag = buildDownloadEtag(slug, index, file.size, record.ctime);
+
+  if (!reqRange && isIfNoneMatchMatched(c.req.header("If-None-Match"), etag)) {
+    const notModifiedHeaders = new Headers();
+    notModifiedHeaders.set("etag", etag);
+    notModifiedHeaders.set("cache-control", FILE_DOWNLOAD_CACHE_CONTROL);
+    return new Response(null, {
+      status: 304,
+      headers: notModifiedHeaders,
+    });
+  }
+
+  const cacheKey = new Request(c.req.url, { method: "GET" });
+  if (!reqRange) {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const r = reqRange
+    ? await c.env.MY_BUCKET.get(filePath, { range: c.req.raw.headers })
+    : await c.env.MY_BUCKET.get(filePath);
 
   if (!r) {
     c.status(404);
     return c.json({ error: "File not found" });
   }
 
-  const basename = filePath.split("/").pop()!.replace(/\?.*/, "");
-  const originalName = String(file?.name || "").replace(/\?.*/, "");
-  const downloadName = (originalName || basename).split(/[\\/]/).pop() || "file";
-  const lowerName = downloadName.toLowerCase();
   const headers = new Headers();
-
   r.writeHttpMetadata(headers);
-  if (r.range && c.req.header('Range')) {
-    c.status(206);
+  let status = 200;
+
+  if (r.range && reqRange) {
+    status = 206;
     headers.set("content-range", generateContentRangeHeader(r.range, r.size));
+    headers.set("cache-control", RANGE_DOWNLOAD_CACHE_CONTROL);
+  } else {
+    headers.set("etag", etag);
+    headers.set("cache-control", FILE_DOWNLOAD_CACHE_CONTROL);
   }
   headers.set("accept-ranges", "bytes");
-
   const dispositionType = RE_ASSET_SUFFIX.test(lowerName) ? "inline" : "attachment";
   headers.set("content-disposition", buildContentDisposition(dispositionType, downloadName));
-  headers.forEach((value, key) => c.header(key, value));
-  return c.body(r.body)
+
+  const response = new Response(r.body, {
+    status,
+    headers,
+  });
+
+  if (!reqRange && status === 200) {
+    c.executionCtx.waitUntil(caches.default.put(cacheKey, response.clone()));
+  }
+
+  return response;
 });
 
 app.post("/api/delete", authWithPassword, async (c) => {
@@ -405,6 +589,27 @@ app.post("/api/purge", authWithPassword, async (c) => {
     c.env.MY_BUCKET.delete(paths)
   );
   return c.json({ ok: true });
+});
+
+app.get("*", async (c) => {
+  const url = new URL(c.req.url);
+  if (url.pathname.startsWith("/api/")) {
+    return c.notFound();
+  }
+
+  const assetResponse = await c.env.ASSETS.fetch(c.req.raw);
+  const cacheControl = resolveStaticCacheControl(url.pathname);
+  if (!cacheControl) {
+    return assetResponse;
+  }
+
+  const headers = new Headers(assetResponse.headers);
+  headers.set("Cache-Control", cacheControl);
+  return new Response(assetResponse.body, {
+    status: assetResponse.status,
+    statusText: assetResponse.statusText,
+    headers,
+  });
 });
 
 export default app;

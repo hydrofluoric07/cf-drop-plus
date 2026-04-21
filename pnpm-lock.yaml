@@ -30,6 +30,12 @@ importers:
       jotai:
         specifier: ^2.11.0
         version: 2.11.0(@types/react@19.0.2)(react@19.0.0)
+      linkify-react:
+        specifier: ^4.3.2
+        version: 4.3.2(linkifyjs@4.3.2)(react@19.0.0)
+      linkifyjs:
+        specifier: ^4.3.2
+        version: 4.3.2
       react:
         specifier: ^19.0.0
         version: 19.0.0
@@ -2302,6 +2308,15 @@ packages:
 
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
+
+  linkify-react@4.3.2:
+    resolution: {integrity: sha512-mi744h1hf+WDsr+paJgSBBgYNLMWNSHyM9V9LVUo03RidNGdw1VpI7Twnt+K3pEh3nIzB4xiiAgZxpd61ItKpQ==}
+    peerDependencies:
+      linkifyjs: ^4.0.0
+      react: '>= 15.0.0'
+
+  linkifyjs@4.3.2:
+    resolution: {integrity: sha512-NT1CJtq3hHIreOianA8aSXn6Cw0JzYOuDQbOrSPe7gqFnCpKP++MQe3ODgO3oh2GJFORkAAdqredOa60z63GbA==}
 
   load-json-file@4.0.0:
     resolution: {integrity: sha512-Kx8hMakjX03tiGTLAIdJ+lL0htKnXjEZN6hk/tozf/WOuYGdZBJrZ+rCJRbVCugsjB3jMLn9746NsQIf5VjBMw==}
@@ -5513,6 +5528,13 @@ snapshots:
   leven@3.1.0: {}
 
   lines-and-columns@1.2.4: {}
+
+  linkify-react@4.3.2(linkifyjs@4.3.2)(react@19.0.0):
+    dependencies:
+      linkifyjs: 4.3.2
+      react: 19.0.0
+
+  linkifyjs@4.3.2: {}
 
   load-json-file@4.0.0:
     dependencies:
