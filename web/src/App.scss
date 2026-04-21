@@ -149,6 +149,38 @@ body,
   min-height: 100%;
 }
 
+html[data-theme='light'] {
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+@supports (color-scheme: only light) {
+  html[data-theme='light'] {
+    color-scheme: only light;
+  }
+}
+
+html[data-ext-mode='1'],
+body[data-ext-mode='1'],
+html[data-ext-mode='1'] #root,
+html[data-ext-mode='1'] .app-root {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html[data-ext-mode='1']::-webkit-scrollbar,
+body[data-ext-mode='1']::-webkit-scrollbar,
+html[data-ext-mode='1'] #root::-webkit-scrollbar,
+html[data-ext-mode='1'] .app-root::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -240,12 +272,21 @@ textarea:focus-visible,
   position: relative;
   min-height: 100vh;
   padding: clamp(0.72rem, 2.2vw, 1.45rem) var(--app-side-padding-desktop) clamp(1rem, 3vw, 2.3rem);
-  overflow: hidden;
+  overflow-x: hidden;
+}
+
+.app-root.is-extension-mode {
+  padding-top: clamp(0.56rem, 1.5vw, 0.86rem);
+}
+
+.app-root.is-extension-mode .app-topbar {
+  display: none !important;
 }
 
 .app-topbar {
-  position: relative;
-  z-index: 12;
+  position: sticky;
+  top: max(0.3rem, env(safe-area-inset-top));
+  z-index: 44;
   width: min(980px, 100%);
   margin: 0 auto 0.64rem;
   display: flex;
@@ -1141,6 +1182,25 @@ textarea:focus-visible,
   text-align: center;
 }
 
+.records-loading {
+  color: var(--text-soft);
+  font-family: inherit;
+  padding: 1.1rem;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.records-loading-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--text-faint);
+  animation: records-loading-pulse 1.2s ease-in-out infinite;
+}
+
 .record-card {
   width: 100%;
   background: var(--record-card-bg);
@@ -1599,6 +1659,18 @@ textarea:focus-visible,
   }
 }
 
+@keyframes records-loading-pulse {
+  0%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+}
+
 @media (max-width: 768px) {
   html {
     font-size: 15px;
@@ -1609,6 +1681,7 @@ textarea:focus-visible,
   }
 
   .app-topbar {
+    top: max(0.18rem, env(safe-area-inset-top));
     margin-bottom: 0.5rem;
   }
 

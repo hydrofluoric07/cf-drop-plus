@@ -13,9 +13,11 @@ export const defaultLocale: Locale = 'zh-CN';
 
 const zhCN = {
   'language.switchAria': '语言切换',
+  'settings.openAria': '打开设置菜单',
   'language.zhCN': '中文',
   'language.en': 'EN',
   'theme.switchAria': '主题切换',
+  'theme.system': '跟随系统',
   'theme.light': '浅色模式',
   'theme.dark': '深色模式',
   'auth.logoutAria': '退出登录',
@@ -31,9 +33,10 @@ const zhCN = {
   'composer.dropFiles': '松开以上传文件',
 
   'records.errorPrefix': '错误',
+  'records.loading': '加载中...',
   'records.empty': '暂无上传记录。可在上方粘贴文本或添加文件。',
   'records.loadMore': '加载更多',
-  'records.copyText': '复制文本',
+  'records.copyText': '复制',
   'records.downloadAll': '下载全部',
   'records.delete': '删除',
   'records.previewCloseAria': '关闭图片预览',
@@ -90,9 +93,11 @@ const zhCN = {
 
 const en = {
   'language.switchAria': 'Language switch',
+  'settings.openAria': 'Open settings menu',
   'language.zhCN': '中文',
   'language.en': 'EN',
   'theme.switchAria': 'Theme switch',
+  'theme.system': 'System',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
   'auth.logoutAria': 'Logout',
@@ -108,9 +113,10 @@ const en = {
   'composer.dropFiles': 'Drop files to upload',
 
   'records.errorPrefix': 'Error',
+  'records.loading': 'Loading...',
   'records.empty': 'No uploads yet. Paste text or add files above to create your first entry.',
   'records.loadMore': 'Load more',
-  'records.copyText': 'Copy Text',
+  'records.copyText': 'Copy',
   'records.downloadAll': 'Download All',
   'records.delete': 'Delete',
   'records.previewCloseAria': 'Close image preview',

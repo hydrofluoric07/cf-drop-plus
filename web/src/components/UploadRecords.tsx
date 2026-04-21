@@ -7,6 +7,7 @@ import 'dayjs/locale/zh-cn';
 
 import type { RecordFilterType, UploadRecord } from '../../../src/database';
 import { fetchAPI } from '../store/auth';
+import { RECORD_CREATED_EVENT, type RecordCreatedEventDetail } from '../store/uploading';
 import { PopoverConfirm } from './PopoverConfirm';
 import { useLocale, useT } from '../store/locale';
 import { tError, type TranslationKey } from '../i18n';
@@ -37,6 +38,58 @@ const FILE_MENU_WIDTH = 120;
 const FILE_MENU_ESTIMATED_HEIGHT = 92;
 const FILE_MENU_GAP = 6;
 const FILE_MENU_VIEWPORT_PADDING = 8;
+const PAGE_SIZE_FALLBACK = 20;
+
+const IMAGE_FILE_EXTS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'bmp',
+  'svg',
+  'avif',
+  'heic',
+]);
+
+const DOCUMENT_FILE_EXTS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt',
+  'md',
+  'rtf',
+  'csv',
+  'json',
+  'xml',
+  'yaml',
+  'yml',
+]);
+
+const ARCHIVE_FILE_EXTS = new Set([
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  'tgz',
+]);
+
+const AUDIO_FILE_EXTS = new Set([
+  'mp3',
+  'wav',
+  'flac',
+  'aac',
+  'm4a',
+  'ogg',
+  'opus',
+]);
 
 const uploaderDeviceLabelKeys: Record<UploaderDeviceType, TranslationKey> = {
   windows: 'records.deviceWindows',
@@ -68,6 +121,7 @@ export const UploadRecords = memo(() => {
   const [locale] = useLocale();
   const t = useT();
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
+  const [isListPending, setIsListPending] = useState(true);
   const [selectedDate, setSelectedDate] = useState('');
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<RecordFilterType>('all');
@@ -91,6 +145,9 @@ export const UploadRecords = memo(() => {
       to: start.add(1, 'day').startOf('day').valueOf(),
     };
   }, [selectedDate]);
+  const isRecordMatchedCurrentFilter = useCallback((record: UploadRecord) => (
+    isRecordMatchedByFilter(record, selectedType, dateRange)
+  ), [dateRange, selectedType]);
 
   const filterSearch = useMemo(() => {
     const params = new URLSearchParams();
@@ -143,6 +200,7 @@ export const UploadRecords = memo(() => {
   }, [locale]);
 
   const refreshRecords = useCallback(async () => {
+    setIsListPending(true);
     setCurrentPage(1);
     const loadedPages = data?.length ?? 0;
     if (loadedPages > 1) {
@@ -154,6 +212,76 @@ export const UploadRecords = memo(() => {
     }
     await mutateCount();
   }, [data?.length, mutate, mutateCount, setSize]);
+  const mutateCountBy = useCallback((delta: number) => {
+    void mutateCount((prev?: RecordCountResponse) => {
+      const pageSize = prev?.pageSize || PAGE_SIZE_FALLBACK;
+      const total = Math.max(0, (prev?.total || 0) + delta);
+      return {
+        total,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
+    }, {
+      revalidate: false,
+    });
+  }, [mutateCount]);
+  const applyCreatedRecord = useCallback((record: UploadRecord) => {
+    if (!isRecordMatchedCurrentFilter(record)) return;
+
+    mutateCountBy(1);
+    if (currentPage !== 1) return;
+
+    void mutate((pages?: UploadRecord[][]) => {
+      if (!pages || !pages.length) return [[record]];
+      if (pages.some((page) => page.some((item) => item.id === record.id))) return pages;
+
+      const pageSize = countData?.pageSize || PAGE_SIZE_FALLBACK;
+      const next = pages.map((page) => page.slice());
+      next[0] = [record, ...next[0]].slice(0, pageSize);
+      return next;
+    }, {
+      revalidate: false,
+    });
+  }, [countData?.pageSize, currentPage, isRecordMatchedCurrentFilter, mutate, mutateCountBy]);
+  const handleDeleteRecord = useCallback((id: number) => {
+    const snapshotPages = data?.map((page) => page.slice());
+    const snapshotCount = countData ? { ...countData } : undefined;
+    const removedRecord = snapshotPages?.flat().find((item) => item.id === id);
+
+    void mutate((pages?: UploadRecord[][]) => {
+      if (!pages) return pages;
+      return pages.map((page) => page.filter((item) => item.id !== id));
+    }, {
+      revalidate: false,
+    });
+
+    if (removedRecord && isRecordMatchedCurrentFilter(removedRecord)) {
+      mutateCountBy(-1);
+    }
+
+    fetchAPI('/api/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id }),
+    })
+      .then((res) => res.json())
+      .then((resp) => {
+        if (!resp?.ok) {
+          throw new Error('error.unknown');
+        }
+      })
+      .catch((err) => {
+        console.error('delete failed', err);
+        if (snapshotPages) {
+          void mutate(snapshotPages, { revalidate: false });
+        }
+        if (snapshotCount) {
+          void mutateCount(snapshotCount, { revalidate: false });
+        }
+      });
+  }, [countData, data, isRecordMatchedCurrentFilter, mutate, mutateCount, mutateCountBy]);
 
   useEffect(() => {
     const refresh = () => {
@@ -164,13 +292,31 @@ export const UploadRecords = memo(() => {
   }, [refreshRecords]);
 
   useEffect(() => {
+    const onRecordCreated = (event: Event) => {
+      const detail = (event as CustomEvent<RecordCreatedEventDetail>).detail;
+      if (!detail?.record) return;
+      applyCreatedRecord(detail.record);
+    };
+
+    window.addEventListener(RECORD_CREATED_EVENT, onRecordCreated as EventListener);
+    return () => window.removeEventListener(RECORD_CREATED_EVENT, onRecordCreated as EventListener);
+  }, [applyCreatedRecord]);
+
+  useEffect(() => {
     if (!hasCountKeyMountedRef.current) {
       hasCountKeyMountedRef.current = true;
       return;
     }
+    setIsListPending(true);
     setCurrentPage(1);
     void setSize(1);
   }, [countKey, setSize]);
+
+  useEffect(() => {
+    if (error || (!isLoading && !isValidating)) {
+      setIsListPending(false);
+    }
+  }, [error, isLoading, isValidating]);
 
   useEffect(() => {
     if (!typeMenuOpen && !dateMenuOpen) return;
@@ -241,6 +387,7 @@ export const UploadRecords = memo(() => {
   const totalPages = countData?.totalPages || 0;
   const visiblePage = data?.[currentPage - 1] || [];
   const displayCurrentPage = totalPages === 0 ? 0 : Math.min(currentPage, totalPages);
+  const showRecordsLoading = !error && (isListPending || (isLoading && !data?.length));
   const selectedDateValue = useMemo(() => {
     if (!selectedDate) return null;
     const value = dayjs(selectedDate, 'YYYY-MM-DD');
@@ -314,11 +461,13 @@ export const UploadRecords = memo(() => {
     });
   }, [selectedDateValue]);
   const applyDate = useCallback((value: dayjs.Dayjs) => {
+    setIsListPending(true);
     setSelectedDate(value.format('YYYY-MM-DD'));
     setDateMenuOpen(false);
     dateMenuTriggerRef.current?.focus();
   }, []);
   const clearDate = useCallback(() => {
+    setIsListPending(true);
     setSelectedDate('');
     setDateMenuOpen(false);
     dateMenuTriggerRef.current?.focus();
@@ -460,6 +609,7 @@ export const UploadRecords = memo(() => {
                     className={`records-type-option ${item.value === selectedType ? 'is-active' : ''}`}
                     aria-selected={item.value === selectedType}
                     onClick={() => {
+                      setIsListPending(true);
                       setSelectedType(item.value);
                       setTypeMenuOpen(false);
                       typeMenuTriggerRef.current?.focus();
@@ -490,13 +640,24 @@ export const UploadRecords = memo(() => {
             {t('common.errorWithMessage', { message: tError(locale, error.message) })}
           </div>
         )}
-        {!error && !isLoading && totalPages === 0 && (
+        {showRecordsLoading && (
+          <div className="records-loading" role="status" aria-live="polite">
+            <span className="records-loading-dot" aria-hidden="true" />
+            <span>{t('records.loading')}</span>
+          </div>
+        )}
+        {!error && !showRecordsLoading && totalPages === 0 && (
           <div className="records-empty">{t('records.empty')}</div>
         )}
-        {!error && visiblePage.length > 0 && (
+        {!error && !showRecordsLoading && visiblePage.length > 0 && (
           <div className="records-page">
             {visiblePage.map((record) => (
-              <UploadRecordItem key={record.id} record={record} onPreviewImage={openImagePreview} />
+              <UploadRecordItem
+                key={record.id}
+                record={record}
+                onPreviewImage={openImagePreview}
+                onDeleteRecord={handleDeleteRecord}
+              />
             ))}
           </div>
         )}
@@ -533,7 +694,11 @@ export const UploadRecords = memo(() => {
   );
 });
 
-const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (src: string, name: string) => void }) => {
+const UploadRecordItem = memo((props: {
+  record: UploadRecord;
+  onPreviewImage: (src: string, name: string) => void;
+  onDeleteRecord: (id: number) => void;
+}) => {
   const t = useT();
   const files = useMemo(() => props.record.files || [], [props.record.files]);
   const [openFileMenu, setOpenFileMenu] = useState<OpenFileMenuState | null>(null);
@@ -641,7 +806,7 @@ const UploadRecordItem = memo((props: { record: UploadRecord; onPreviewImage: (s
       )
     }
 
-    <PopoverConfirm onConfirm={() => deleteRecord(props.record.id)}>
+    <PopoverConfirm onConfirm={() => props.onDeleteRecord(props.record.id)}>
       <a
         className={`${actionLink} record-action-danger`}
         onClick={(e) => e.preventDefault()} href='#' role='button'>
@@ -835,6 +1000,76 @@ function getFileExt(name: string) {
   return name.slice(dotIndex + 1).toUpperCase();
 }
 
+function getFileExtLower(name: string) {
+  const dotIndex = name.lastIndexOf('.');
+  if (dotIndex <= 0) return '';
+  if (dotIndex === name.length - 1) return '';
+  return name.slice(dotIndex + 1).toLowerCase();
+}
+
+function isDocumentMime(mime: string) {
+  if (!mime) return false;
+  if (mime.startsWith('text/')) return true;
+  if (mime === 'application/pdf' || mime === 'application/rtf') return true;
+  if (mime.startsWith('application/msword')) return true;
+  if (mime.startsWith('application/vnd.openxmlformats-officedocument')) return true;
+  if (mime.startsWith('application/vnd.ms-')) return true;
+  if (mime.endsWith('/json') || mime.endsWith('/xml') || mime.endsWith('/yaml')) return true;
+  return false;
+}
+
+function isArchiveMime(mime: string) {
+  if (!mime) return false;
+  return [
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-rar-compressed',
+    'application/vnd.rar',
+    'application/x-7z-compressed',
+    'application/gzip',
+    'application/x-gzip',
+    'application/x-tar',
+    'application/x-bzip2',
+    'application/x-xz',
+  ].includes(mime);
+}
+
+function isTypeMatchedByFile(file: UploadRecord['files'][number], recordType: Exclude<RecordFilterType, 'all' | 'text'>) {
+  const mime = String(file.type || '').toLowerCase();
+  const ext = getFileExtLower(file.name || '');
+
+  const matchesImage = mime.startsWith('image/') || Boolean(file.thumbnail) || IMAGE_FILE_EXTS.has(ext);
+  const matchesDocument = isDocumentMime(mime) || DOCUMENT_FILE_EXTS.has(ext);
+  const matchesArchive = isArchiveMime(mime) || ARCHIVE_FILE_EXTS.has(ext);
+  const matchesAudio = mime.startsWith('audio/') || AUDIO_FILE_EXTS.has(ext);
+
+  if (recordType === 'image') return matchesImage;
+  if (recordType === 'document') return matchesDocument;
+  if (recordType === 'archive') return matchesArchive;
+  if (recordType === 'audio') return matchesAudio;
+  if (recordType === 'other') return !matchesImage && !matchesDocument && !matchesArchive && !matchesAudio;
+
+  return false;
+}
+
+function isRecordMatchedByFilter(
+  record: UploadRecord,
+  recordType: RecordFilterType,
+  dateRange: { from: number; to: number } | null,
+) {
+  if (dateRange) {
+    if (record.ctime < dateRange.from) return false;
+    if (record.ctime >= dateRange.to) return false;
+  }
+
+  if (recordType === 'all') return true;
+  if (recordType === 'text') return Boolean(record.message && record.message.trim());
+
+  const files = record.files || [];
+  if (!files.length) return false;
+  return files.some((file) => isTypeMatchedByFile(file, recordType));
+}
+
 async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -846,19 +1081,4 @@ async function copyToClipboard(text: string) {
     document.execCommand('copy');
     document.body.removeChild(textarea);
   }
-}
-
-function deleteRecord(id: number) {
-  fetchAPI('/api/delete', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ id }),
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      console.log('deleted data', data);
-      window.dispatchEvent(new Event('records-updated'));
-    });
 }

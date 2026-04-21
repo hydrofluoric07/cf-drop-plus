@@ -1,6 +1,22 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('cf-drop:theme-mode');
+          var mode = raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
+          var isDark = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = mode === 'system' ? (isDark ? 'dark' : 'light') : mode;
+          var root = document.documentElement;
+          root.dataset.theme = theme;
+          root.dataset.themeMode = mode;
+          root.style.colorScheme = theme;
+        } catch (_err) {
+          // ignore storage access errors
+        }
+      })();
+    </script>
     <link rel="manifest" href="<%= publicPath %>manifest.json" />
     <meta name="theme-color" content="#000000" />
     <link rel="apple-touch-icon" href="<%= publicPath %>logo192.png" />

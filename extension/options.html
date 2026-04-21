@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cf-drop 扩展设置</title>
+  <link rel="stylesheet" href="./options.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="head">
+      <h1>cf-drop 扩展设置</h1>
+      <p>配置你自己的 Cloudflare Worker 实例，支持多个实例切换。</p>
+    </header>
+
+    <section class="panel">
+      <h2>界面语言</h2>
+      <div class="locale-row">
+        <label class="label" for="localeSelect">语言</label>
+        <select id="localeSelect" class="input select">
+          <option value="zh-CN">简体中文</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>新增 / 编辑实例</h2>
+      <form id="instanceForm" class="form">
+        <input id="instanceId" type="hidden" />
+
+        <label class="label" for="instanceName">名称</label>
+        <input id="instanceName" class="input" type="text" placeholder="例如：个人实例" required />
+
+        <label class="label" for="instanceBaseUrl">Worker 地址</label>
+        <input id="instanceBaseUrl" class="input" type="url" placeholder="https://your-domain.example.com" required />
+
+        <label class="label" for="instancePassword">密码</label>
+        <input id="instancePassword" class="input" type="password" placeholder="可留空（若服务端未启用密码）" />
+
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">保存实例</button>
+          <button id="cancelEditBtn" class="btn btn-ghost hidden" type="button">取消编辑</button>
+          <button id="testBtn" class="btn btn-ghost" type="button">测试连接</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>实例列表</h2>
+      <div id="instancesList" class="instances-empty">暂无实例，请先新增。</div>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="./options.js"></script>
+</body>
+</html>

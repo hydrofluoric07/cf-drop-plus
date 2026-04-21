@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "cf-drop Extension",
+  "version": "0.1.0",
+  "description": "Send text/files to your own cf-drop Worker instance.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "cf-drop",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

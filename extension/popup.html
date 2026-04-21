@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cf-drop</title>
+  <link rel="stylesheet" href="./popup.css" />
+</head>
+<body>
+  <main class="popup">
+    <header class="popup-head">
+      <div class="popup-title-wrap">
+        <h1>cf-drop</h1>
+      </div>
+      <div class="popup-head-actions">
+        <button id="themeToggleBtn" class="btn btn-ghost btn-icon" type="button" aria-label="主题切换" title="主题切换">
+          <svg class="btn-icon-svg theme-icon theme-icon-system" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+            <path d="M8 20h8"></path>
+            <path d="M12 16v4"></path>
+          </svg>
+          <svg class="btn-icon-svg theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg class="btn-icon-svg theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path>
+          </svg>
+        </button>
+        <button id="openOptionsBtn" class="btn btn-ghost btn-icon" type="button" aria-label="设置" title="设置">
+          <svg class="btn-icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-1 1.46V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.46 1.6 1.6 0 0 0-1.77.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.46-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.46-1 1.6 1.6 0 0 0-.32-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.6 1.6 0 0 0 1.77.32h.02a1.6 1.6 0 0 0 1-1.46V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.46 1.6 1.6 0 0 0 1.77-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.6 1.6 0 0 0-.32 1.77v.02a1.6 1.6 0 0 0 1.46 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.46 1z"></path>
+          </svg>
+        </button>
+        <button id="logoutBtn" class="btn btn-ghost btn-icon" type="button" aria-label="退出登录" title="退出登录">
+          <svg class="btn-icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <path d="m15 16 5-4-5-4"></path>
+            <path d="M20 12H9"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <section id="setupNotice" class="panel hidden">
+      <p class="hint">未配置实例，请先在设置页填写你的 Worker 地址和密码。</p>
+      <div class="setup-actions">
+        <button id="goSetupBtn" class="btn btn-primary" type="button">前往配置</button>
+      </div>
+    </section>
+
+    <section id="mainPanel" class="main-panel hidden">
+      <iframe id="appFrame" class="app-frame" src="about:blank" title="cf-drop mobile view"></iframe>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="./popup.js"></script>
+</body>
+</html>

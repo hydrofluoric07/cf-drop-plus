@@ -5,21 +5,90 @@ import { PasswordInput } from './components/PasswordInput';
 import { useAtom } from 'jotai';
 import { uploadingErrorAtom, uploadingProgressAtom } from './store/uploading';
 import { useLocale, useT } from './store/locale';
-import { localeOptions, tError } from './i18n';
+import { localeOptions, tError, resolveLocale } from './i18n';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useThemeMode } from './store/theme';
+import { ThemeMode, useThemeMode } from './store/theme';
 import { logout, passwordAtom } from './store/auth';
 
 const App = () => {
+  const [, setLocale] = useLocale();
+  const [themeMode, setThemeMode] = useThemeMode();
+  const isExtensionMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('ext') === '1';
+  const extensionLocale = typeof window !== 'undefined'
+    ? resolveLocale(new URLSearchParams(window.location.search).get('extLocale'))
+    : null;
+  const extensionTheme = typeof window !== 'undefined'
+    ? resolveThemeMode(new URLSearchParams(window.location.search).get('extTheme'))
+    : null;
+
+  useEffect(() => {
+    if (!isExtensionMode || !extensionLocale) return;
+    setLocale(extensionLocale);
+  }, [extensionLocale, isExtensionMode, setLocale]);
+
+  useEffect(() => {
+    if (!isExtensionMode || !extensionTheme) return;
+    setThemeMode(extensionTheme);
+  }, [extensionTheme, isExtensionMode, setThemeMode]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    if (isExtensionMode) {
+      html.dataset.extMode = '1';
+      body.dataset.extMode = '1';
+    } else {
+      delete html.dataset.extMode;
+      delete body.dataset.extMode;
+    }
+
+    return () => {
+      delete html.dataset.extMode;
+      delete body.dataset.extMode;
+    };
+  }, [isExtensionMode]);
+
+  useEffect(() => {
+    if (!isExtensionMode) return;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window.parent) return;
+      const type = String(event.data?.type || '');
+      if (type === 'cf-drop-ext-theme-toggle') {
+        setThemeMode(getNextThemeMode(themeMode));
+        return;
+      }
+      if (type === 'cf-drop-ext-theme-set') {
+        const nextTheme = resolveThemeMode(event.data?.theme);
+        if (nextTheme) {
+          setThemeMode(nextTheme);
+        }
+        return;
+      }
+      if (type === 'cf-drop-ext-logout') {
+        void logout();
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [isExtensionMode, setThemeMode, themeMode]);
+
   return (
-    <div className="app-root">
-      <div className="app-topbar">
-        <div className="app-controls">
-          <LanguageSwitcher />
-          <ThemeSwitcher />
-          <LogoutButton />
+    <div className={`app-root${isExtensionMode ? ' is-extension-mode' : ''}`}>
+      {!isExtensionMode && (
+        <div className="app-topbar">
+          <div className="app-controls">
+            <LanguageSwitcher />
+            <ThemeSwitcher />
+            <LogoutButton />
+          </div>
         </div>
-      </div>
+      )}
 
       <main className="app-shell">
         <section className="workspace-panel">
@@ -117,15 +186,25 @@ function LanguageSwitcher() {
 function ThemeSwitcher() {
   const t = useT();
   const [themeMode, setThemeMode] = useThemeMode();
-  const icon = themeMode === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun';
-  const nextMode = themeMode === 'dark' ? 'light' : 'dark';
+  const icon = themeMode === 'dark'
+    ? 'i-lucide-moon'
+    : themeMode === 'light'
+      ? 'i-lucide-sun'
+      : 'i-lucide-monitor';
 
   return (
     <button
       type="button"
       className="theme-trigger"
       aria-label={t('theme.switchAria')}
-      onClick={() => setThemeMode(nextMode)}
+      title={
+        themeMode === 'system'
+          ? t('theme.system')
+          : themeMode === 'light'
+            ? t('theme.light')
+            : t('theme.dark')
+      }
+      onClick={() => setThemeMode(getNextThemeMode(themeMode))}
     >
       <i className={`${icon} theme-trigger-icon`} />
     </button>
@@ -174,3 +253,16 @@ function SimpleProgressBar() {
 }
 
 export default App;
+
+function resolveThemeMode(input: unknown): ThemeMode | null {
+  if (input === 'system' || input === 'light' || input === 'dark') {
+    return input;
+  }
+  return null;
+}
+
+function getNextThemeMode(current: ThemeMode): ThemeMode {
+  if (current === 'system') return 'light';
+  if (current === 'light') return 'dark';
+  return 'system';
+}

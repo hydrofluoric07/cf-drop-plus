@@ -1,4 +1,12 @@
 import type { FileStoreItem } from "../database/files";
+import type { UploadRecord } from "../../../src/database";
+
+export interface UploadAPIResponse {
+  record?: {
+    id: number;
+    inserted: UploadRecord;
+  };
+}
 
 /**
  * The actual upload logic, it invokes API /api/upload
@@ -40,7 +48,7 @@ export async function invokeUploadAPI(opts: {
   // });
   // const resText = await res.text();
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<UploadAPIResponse>((resolve, reject) => {
     // ---- xhr way ----
 
     const xhr = new XMLHttpRequest();
@@ -59,8 +67,15 @@ export async function invokeUploadAPI(opts: {
       console.log('upload response', xhr.responseText);
 
       if (xhr.status === 200) {
+        let payload: UploadAPIResponse;
+        try {
+          payload = JSON.parse(xhr.responseText) as UploadAPIResponse;
+        } catch {
+          reject(new Error('error.uploadFailed'));
+          return;
+        }
         onProgress(100);
-        resolve(JSON.parse(xhr.responseText));
+        resolve(payload);
         return;
       }
 

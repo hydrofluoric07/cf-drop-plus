@@ -6,7 +6,7 @@ const KvDefaults = {
   password: '',
   inputText: '',
   locale: '',
-  themeMode: 'light',
+  themeMode: 'system',
 }
 
 export type KvKey = keyof typeof KvDefaults;

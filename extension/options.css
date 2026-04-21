@@ -1,0 +1,209 @@
+:root {
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --surface-soft: #f8f7f3;
+  --line: #d8d6ce;
+  --line-hover: #c7c4ba;
+  --text: #23231f;
+  --text-soft: #66645c;
+  --accent-bg: #161615;
+  --accent-bg-hover: #272725;
+  --accent-text: #fff;
+  --danger: #b42318;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Avenir Next', 'Segoe UI Variable Text', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.page {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.head h1 {
+  margin: 0 0 0.24rem;
+  font-size: 1.2rem;
+}
+
+.head p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.64rem;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.form {
+  display: grid;
+  gap: 0.44rem;
+}
+
+.locale-row {
+  display: grid;
+  gap: 0.44rem;
+}
+
+.label {
+  font-size: 0.82rem;
+  color: var(--text-soft);
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0.58rem 0.68rem;
+  font: inherit;
+}
+
+.select {
+  appearance: none;
+  padding-right: 2rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-soft) 50%),
+    linear-gradient(135deg, var(--text-soft) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.input:focus-visible {
+  outline: 0;
+  border-color: var(--line-hover);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0.5rem 0.76rem;
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--line-hover);
+}
+
+.btn-primary {
+  background: var(--accent-bg);
+  border-color: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.btn-primary:hover {
+  background: var(--accent-bg-hover);
+  border-color: var(--accent-bg-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+.btn-danger {
+  color: var(--danger);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.instances-empty {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.instances {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.instance-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.62rem 0.7rem;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 0.36rem;
+}
+
+.instance-item.is-active {
+  border-color: #8f8b7f;
+}
+
+.instance-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.instance-name {
+  font-weight: 600;
+}
+
+.instance-tag {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.08rem 0.42rem;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.instance-url {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  word-break: break-all;
+}
+
+.instance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.status {
+  min-height: 1.2rem;
+  font-size: 0.84rem;
+  color: var(--text-soft);
+}
+
+.status.is-error {
+  color: var(--danger);
+}
