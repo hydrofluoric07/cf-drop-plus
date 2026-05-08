@@ -9,6 +9,7 @@ import 'dayjs/locale/zh-cn';
 import type { RecordFilterType, UploadRecord } from '../../../src/database';
 import { fetchAPI } from '../store/auth';
 import { RECORD_CREATED_EVENT, type RecordCreatedEventDetail } from '../store/uploading';
+import { showGlobalMessage } from '../store';
 import { PopoverConfirm } from './PopoverConfirm';
 import { useLocale, useT } from '../store/locale';
 import { tError, type TranslationKey } from '../i18n';
@@ -388,8 +389,13 @@ export const UploadRecords = memo(() => {
   const sharePreviewImage = useCallback(() => {
     if (!previewImage) return;
     const absoluteUrl = new URL(previewImage.src, window.location.origin).toString();
-    void copyToClipboard(absoluteUrl);
-  }, [previewImage]);
+    void copyToClipboard(absoluteUrl).then((copied) => {
+      showGlobalMessage({
+        type: copied ? 'success' : 'error',
+        text: copied ? t('toast.copySuccess') : t('toast.copyFailed'),
+      });
+    });
+  }, [previewImage, t]);
 
   const totalPages = countData?.totalPages || 0;
   const visiblePage = data?.[currentPage - 1] || [];
@@ -715,6 +721,14 @@ const UploadRecordItem = memo((props: {
   const uploaderLabel = t(uploaderDeviceLabelKeys[uploaderType]);
   const uploaderIcon = uploaderDeviceIcons[uploaderType];
   const recordTime = formatRecordTime(props.record.ctime, t);
+  const handleCopy = useCallback((text: string) => {
+    void copyToClipboard(text).then((copied) => {
+      showGlobalMessage({
+        type: copied ? 'success' : 'error',
+        text: copied ? t('toast.copySuccess') : t('toast.copyFailed'),
+      });
+    });
+  }, [t]);
 
   const actionLink = 'record-action';
   const resolveFileMenuPosition = useCallback((triggerRect: DOMRect) => {
@@ -792,7 +806,7 @@ const UploadRecordItem = memo((props: {
 
   const actions = <div className="record-actions">
     {!!props.record.message && (<>
-      <a className={actionLink} onClick={(e) => (e.preventDefault(), void copyToClipboard(props.record.message))} href='#' role='button'>
+      <a className={actionLink} onClick={(e) => (e.preventDefault(), handleCopy(props.record.message))} href='#' role='button'>
         <i className="i-lucide-copy record-action-icon"></i>
         {t('records.copyText')}
       </a>
@@ -851,7 +865,7 @@ const UploadRecordItem = memo((props: {
             event.stopPropagation();
             setOpenFileMenu(null);
             const absoluteUrl = new URL(openFileMenu.link, window.location.origin).toString();
-            void copyToClipboard(absoluteUrl);
+            handleCopy(absoluteUrl);
           }}
         >
           {t('records.fileActionShare')}
@@ -1086,12 +1100,21 @@ function isRecordMatchedByFilter(
 async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
-  } catch (err) {
+    return true;
+  } catch {
     const textarea = document.createElement('textarea');
     textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
     document.body.appendChild(textarea);
     textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
+    try {
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
   }
 }
