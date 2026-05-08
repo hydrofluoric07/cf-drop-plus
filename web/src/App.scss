@@ -1849,11 +1849,13 @@ textarea:focus-visible,
 
   .composer-toolbar {
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .composer-toolbar-left {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .composer-toolbar-right {
@@ -1864,7 +1866,13 @@ textarea:focus-visible,
 
   .composer-send {
     width: auto;
+    min-width: 92px;
     min-height: 32px;
+    flex-shrink: 0;
+  }
+
+  .composer-tool-btn {
+    min-width: 0;
   }
 
   .record-file-item {
@@ -1878,7 +1886,7 @@ textarea:focus-visible,
   }
 
   .record-actions {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 }
 

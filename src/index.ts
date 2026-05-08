@@ -21,6 +21,7 @@ type Bindings = {
   DB: D1Database;
   MY_BUCKET: R2Bucket;
   PASSWORD: string;
+  AUTH_TIMING_DEBUG?: string;
 };
 
 const uploaderDeviceTypes = ['windows', 'macos', 'linux', 'ios', 'android', 'ipados', 'unknown'] as const;
@@ -33,6 +34,7 @@ const PROTECTED_ROUTE_CACHE_CONTROL = "no-store";
 const AUTH_FAIL_WINDOW_MS = 10 * 60 * 1000;
 const AUTH_FAIL_BLOCK_THRESHOLD = 5;
 const AUTH_FAIL_BLOCK_STEPS_MS = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000] as const;
+let migrationReadyPromise: Promise<void> | null = null;
 
 interface AuthGuardRow {
   key_hash: string;
@@ -117,19 +119,49 @@ async function recordAuthFailure(
   return blockedUntil;
 }
 
-async function clearAuthFailure(db: D1Database, keyHash: string) {
-  await db.prepare("DELETE FROM auth_guard WHERE key_hash = ?").bind(keyHash).run();
+function ensureTablesMigrated(db: D1Database) {
+  if (!migrationReadyPromise) {
+    migrationReadyPromise = migrateTables(db).catch((err) => {
+      migrationReadyPromise = null;
+      throw err;
+    });
+  }
+  return migrationReadyPromise;
+}
+
+function isAuthTimingDebugEnabled(c: { env: Bindings }) {
+  const raw = String(c.env.AUTH_TIMING_DEBUG || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+function logAuthTiming(c: { req: { method: string; url: string } }, branch: string, startAt: number, extra?: Record<string, string | number>) {
+  const elapsedMs = Date.now() - startAt;
+  const pathname = new URL(c.req.url).pathname;
+  const suffix = extra
+    ? ` ${Object.entries(extra).map(([key, value]) => `${key}=${value}`).join(" ")}`
+    : "";
+  console.log(`[AUTH] ${c.req.method} ${pathname} ${elapsedMs}ms branch=${branch}${suffix}`);
 }
 
 const authWithPassword: H<{ Bindings: Bindings }> = async (c, next) => {
-  await migrateTables(c.env.DB);
+  const authStartAt = Date.now();
+  const authTimingDebug = isAuthTimingDebugEnabled(c);
+  await ensureTablesMigrated(c.env.DB);
 
   const expectedPassword = String(c.env.PASSWORD || "");
   const inputPassword = String(c.req.header("x-password") || "");
   if (!expectedPassword) {
     c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
     c.status(401);
+    if (authTimingDebug) logAuthTiming(c, "missing-password-config", authStartAt);
     return c.json({ error: "Unauthorized" });
+  }
+
+  if (timingSafeEqualString(inputPassword, expectedPassword)) {
+    await next();
+    c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
+    if (authTimingDebug) logAuthTiming(c, "success-fast-path", authStartAt);
+    return;
   }
 
   const now = Date.now();
@@ -140,25 +172,22 @@ const authWithPassword: H<{ Bindings: Bindings }> = async (c, next) => {
     c.header("Retry-After", String(retryAfter));
     c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
     c.status(429);
+    if (authTimingDebug) logAuthTiming(c, "blocked", authStartAt, { retryAfter });
     return c.json({ error: "Too many attempts" });
   }
 
-  if (!timingSafeEqualString(inputPassword, expectedPassword)) {
-    const blockedUntil = await recordAuthFailure(c.env.DB, guardKeyHash, now, guard);
-    c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
-    if (blockedUntil > now) {
-      const retryAfter = Math.max(1, Math.ceil((blockedUntil - now) / 1000));
-      c.header("Retry-After", String(retryAfter));
-      c.status(429);
-      return c.json({ error: "Too many attempts" });
-    }
-    c.status(401);
-    return c.json({ error: "Unauthorized" });
-  }
-
-  await clearAuthFailure(c.env.DB, guardKeyHash);
-  await next();
+  const blockedUntil = await recordAuthFailure(c.env.DB, guardKeyHash, now, guard);
   c.header("Cache-Control", PROTECTED_ROUTE_CACHE_CONTROL);
+  if (blockedUntil > now) {
+    const retryAfter = Math.max(1, Math.ceil((blockedUntil - now) / 1000));
+    c.header("Retry-After", String(retryAfter));
+    c.status(429);
+    if (authTimingDebug) logAuthTiming(c, "blocked-after-failure", authStartAt, { retryAfter });
+    return c.json({ error: "Too many attempts" });
+  }
+  c.status(401);
+  if (authTimingDebug) logAuthTiming(c, "unauthorized", authStartAt);
+  return c.json({ error: "Unauthorized" });
 };
 
 function parsePositiveInt(input?: string | null) {
@@ -218,8 +247,6 @@ function normalizeUploader(rawUploader?: string | null, uaRaw?: string | null): 
 }
 
 app.get("/api/list", authWithPassword, async (c) => {
-  await migrateTables(c.env.DB);
-
   const beforeId = parsePositiveInt(c.req.query("beforeId"));
   const recordType = parseRecordType(c.req.query("recordType"));
   const dateFrom = parseTimestamp(c.req.query("dateFrom"));
@@ -244,8 +271,6 @@ app.get("/api/list", authWithPassword, async (c) => {
 });
 
 app.get("/api/list/count", authWithPassword, async (c) => {
-  await migrateTables(c.env.DB);
-
   const recordType = parseRecordType(c.req.query("recordType"));
   const dateFrom = parseTimestamp(c.req.query("dateFrom"));
   const dateTo = parseTimestamp(c.req.query("dateTo"));
