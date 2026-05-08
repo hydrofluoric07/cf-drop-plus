@@ -64,6 +64,10 @@
   --bg-glow-2: none;
   --status-error-bg: linear-gradient(90deg, var(--danger-soft), rgba(255, 240, 239, 0.35));
   --status-error-line: rgba(180, 35, 24, 0.24);
+  --message-info-accent: #2f6bb0;
+  --message-success-accent: #2b7f53;
+  --message-warning-accent: #b47b1f;
+  --message-error-accent: var(--danger);
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 20px;
@@ -139,6 +143,10 @@
   --shadow-border: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
   --status-error-bg: linear-gradient(90deg, rgba(95, 42, 49, 0.9), rgba(95, 42, 49, 0.35));
   --status-error-line: rgba(241, 129, 129, 0.34);
+  --message-info-accent: #9cc8ff;
+  --message-success-accent: #8ed8ad;
+  --message-warning-accent: #f2cb82;
+  --message-error-accent: #ffacac;
 }
 
 html,
@@ -291,6 +299,119 @@ textarea:focus-visible,
   margin: 0 auto 0.64rem;
   display: flex;
   justify-content: flex-end;
+}
+
+.app-message-layer {
+  position: fixed;
+  top: max(1rem, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 74;
+  display: grid;
+  justify-items: end;
+  padding: 0 0 0 clamp(0.5rem, 2vw, 1rem);
+  pointer-events: none;
+}
+
+.app-message {
+  position: relative;
+  width: fit-content;
+  max-width: 40vw;
+  margin-right: 0;
+  min-height: 42px;
+  border: 1px solid var(--panel-line);
+  border-radius: 13px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel), var(--shadow-border);
+  backdrop-filter: blur(5px);
+  padding: 0.54rem 0.58rem 0.54rem 0.84rem;
+  display: grid;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.54rem;
+  pointer-events: auto;
+  animation: app-message-enter 180ms cubic-bezier(0.18, 0.86, 0.38, 1);
+}
+
+.app-message::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--message-info-accent);
+}
+
+.app-message.is-leaving {
+  animation: app-message-leave 140ms cubic-bezier(0.42, 0, 1, 1) forwards;
+}
+
+.app-message--success::before {
+  background: var(--message-success-accent);
+}
+
+.app-message--warning::before {
+  background: var(--message-warning-accent);
+}
+
+.app-message--error::before {
+  background: var(--message-error-accent);
+}
+
+.app-message-icon {
+  width: 0.96rem;
+  height: 0.96rem;
+  color: var(--message-info-accent);
+  flex-shrink: 0;
+}
+
+.app-message--success .app-message-icon {
+  color: var(--message-success-accent);
+}
+
+.app-message--warning .app-message-icon {
+  color: var(--message-warning-accent);
+}
+
+.app-message--error .app-message-icon {
+  color: var(--message-error-accent);
+}
+
+.app-message-text {
+  min-width: 0;
+  font-size: 0.86rem;
+  line-height: 1.3;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.app-message-close {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-faint);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-message-close i {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.app-message-close:hover {
+  border-color: var(--line);
+  background: var(--surface-hover);
+  color: var(--text-soft);
 }
 
 .app-controls {
@@ -466,6 +587,28 @@ textarea:focus-visible,
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes app-message-enter {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + 14px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes app-message-leave {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(100% + 12px));
   }
 }
 
@@ -1702,6 +1845,25 @@ textarea:focus-visible,
   .app-topbar {
     top: max(0.18rem, env(safe-area-inset-top));
     margin-bottom: 0.5rem;
+  }
+
+  .app-message-layer {
+    top: max(0.75rem, env(safe-area-inset-top));
+    padding: 0;
+  }
+
+  .app-message {
+    width: fit-content;
+    max-width: 60vw;
+    min-height: 40px;
+    padding: 0.5rem 0.52rem 0.5rem 0.76rem;
+    border-radius: 12px;
+    column-gap: 0.48rem;
+  }
+
+  .app-message-text {
+    font-size: 0.84rem;
+    line-height: 1.28;
   }
 
   .locale-trigger {

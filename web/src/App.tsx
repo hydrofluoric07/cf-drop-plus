@@ -9,6 +9,7 @@ import { localeOptions, tError, resolveLocale } from './i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ThemeMode, useThemeMode } from './store/theme';
 import { logout, passwordAtom } from './store/auth';
+import { globalMessageAtom, hideGlobalMessage, showGlobalMessage } from './store';
 
 const App = () => {
   const [, setLocale] = useLocale();
@@ -80,6 +81,8 @@ const App = () => {
 
   return (
     <div className={`app-root${isExtensionMode ? ' is-extension-mode' : ''}`}>
+      <GlobalMessage />
+
       {!isExtensionMode && (
         <div className="app-topbar">
           <div className="app-controls">
@@ -237,6 +240,22 @@ function SimpleProgressBar() {
   const [progress] = useAtom(uploadingProgressAtom);
   const [error] = useAtom(uploadingErrorAtom);
   const translatedError = error ? tError(locale, error) : '';
+  const lastNotifiedErrorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!error) {
+      lastNotifiedErrorRef.current = null;
+      return;
+    }
+    if (lastNotifiedErrorRef.current === error) return;
+
+    showGlobalMessage({
+      type: 'error',
+      text: t('toast.uploadErrorPrefix', { message: translatedError }),
+      durationMs: 3200,
+    });
+    lastNotifiedErrorRef.current = error;
+  }, [error, t, translatedError]);
 
   return (
     <div className="progress-wrap">
@@ -265,4 +284,112 @@ function getNextThemeMode(current: ThemeMode): ThemeMode {
   if (current === 'system') return 'light';
   if (current === 'light') return 'dark';
   return 'system';
+}
+
+function GlobalMessage() {
+  const t = useT();
+  const [message] = useAtom(globalMessageAtom);
+  const [renderedMessage, setRenderedMessage] = useState(message);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const timerStartRef = useRef<number>(0);
+  const remainingMsRef = useRef<number>(0);
+
+  const clearTimer = () => {
+    if (timerRef.current === null) return;
+    window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    timerStartRef.current = 0;
+  };
+
+  useEffect(() => {
+    if (message) {
+      setRenderedMessage(message);
+      setIsLeaving(false);
+      return;
+    }
+
+    if (!renderedMessage) return;
+
+    clearTimer();
+    setIsLeaving(true);
+    const leaveTimer = window.setTimeout(() => {
+      setRenderedMessage(null);
+      setIsLeaving(false);
+    }, 150);
+
+    return () => window.clearTimeout(leaveTimer);
+  }, [message, renderedMessage]);
+
+  useEffect(() => {
+    clearTimer();
+    if (!renderedMessage || isLeaving) return;
+    if (renderedMessage.durationMs <= 0) return;
+
+    remainingMsRef.current = renderedMessage.durationMs;
+    timerStartRef.current = Date.now();
+    timerRef.current = window.setTimeout(() => {
+      hideGlobalMessage(renderedMessage.id);
+    }, remainingMsRef.current);
+
+    return clearTimer;
+  }, [isLeaving, renderedMessage]);
+
+  useEffect(() => () => {
+    clearTimer();
+  }, []);
+
+  if (!renderedMessage) return null;
+
+  const iconClassName = renderedMessage.type === 'success'
+    ? 'i-lucide-check-circle-2'
+    : renderedMessage.type === 'error'
+      ? 'i-lucide-circle-alert'
+      : renderedMessage.type === 'warning'
+        ? 'i-lucide-triangle-alert'
+        : 'i-lucide-info';
+
+  return (
+    <div className="app-message-layer" aria-live={renderedMessage.type === 'error' ? 'assertive' : 'polite'}>
+      <div
+        className={`app-message app-message--${renderedMessage.type}${isLeaving ? ' is-leaving' : ''}`}
+        role="status"
+        onMouseEnter={() => {
+          if (!renderedMessage.durationMs || isLeaving) return;
+          const elapsed = timerStartRef.current ? Date.now() - timerStartRef.current : 0;
+          remainingMsRef.current = Math.max(0, remainingMsRef.current - elapsed);
+          clearTimer();
+        }}
+        onMouseLeave={() => {
+          if (!renderedMessage.durationMs || isLeaving) return;
+          if (remainingMsRef.current <= 0) {
+            hideGlobalMessage(renderedMessage.id);
+            return;
+          }
+          timerStartRef.current = Date.now();
+          timerRef.current = window.setTimeout(() => {
+            hideGlobalMessage(renderedMessage.id);
+          }, remainingMsRef.current);
+        }}
+        onClick={() => {
+          renderedMessage.onClick?.();
+          hideGlobalMessage(renderedMessage.id);
+        }}
+      >
+        <i className={`app-message-icon ${iconClassName}`} aria-hidden="true" />
+        <span className="app-message-text">{renderedMessage.text}</span>
+        <button
+          type="button"
+          className="app-message-close"
+          aria-label={t('common.close')}
+          onClick={(event) => {
+            event.stopPropagation();
+            hideGlobalMessage(renderedMessage.id);
+          }}
+        >
+          <i className="i-lucide-x" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
 }

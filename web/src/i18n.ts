@@ -25,6 +25,7 @@ const zhCN = {
   'common.errorWithMessage': '错误：{message}',
   'common.no': '取消',
   'common.yes': '确认',
+  'common.close': '关闭',
 
   'composer.placeholder': '在这里输入文本，或粘贴 / 拖拽文件...',
   'composer.addFile': '添加文件',
@@ -84,6 +85,9 @@ const zhCN = {
   'password.ok': '确认',
 
   'sw.newVersion': '发现新版本，点击刷新',
+  'toast.copySuccess': '已复制到剪贴板',
+  'toast.copyFailed': '复制失败，请手动复制',
+  'toast.uploadErrorPrefix': '上传失败：{message}',
 
   'errors.noContent': '没有可上传的文件或文本',
   'errors.uploadFailed': '上传失败',
@@ -107,6 +111,7 @@ const en = {
   'common.errorWithMessage': 'Error: {message}',
   'common.no': 'No',
   'common.yes': 'Yes',
+  'common.close': 'Close',
 
   'composer.placeholder': 'Type text here, or paste / drop files...',
   'composer.addFile': 'Add file',
@@ -166,6 +171,9 @@ const en = {
   'password.ok': 'OK',
 
   'sw.newVersion': 'New version available. Click to refresh',
+  'toast.copySuccess': 'Copied to clipboard',
+  'toast.copyFailed': 'Copy failed, please copy manually',
+  'toast.uploadErrorPrefix': 'Upload failed: {message}',
 
   'errors.noContent': 'No files or text to upload',
   'errors.uploadFailed': 'Upload failed',
