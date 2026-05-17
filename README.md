@@ -78,6 +78,54 @@ pnpm build
 pnpm deploy
 ```
 
+### Ubuntu / Debian 命令行使用（CLI）
+
+项目内置了独立 CLI（`cfdrop`），可在命令行完成和网页端一致的核心操作：登录校验、上传文本/文件、列表分页、下载、删除。
+
+1. 在仓库中安装并链接 CLI
+
+```bash
+pnpm install
+pnpm --filter @cf-drop/cli link --global
+```
+
+2. 登录并保存配置
+
+```bash
+cfdrop login --server "https://your-worker.example.com" --password "your-password"
+```
+
+3. 常用命令
+
+```bash
+# 上传文本
+cfdrop upload --message "hello from cli"
+
+# 上传文本 + 文件
+cfdrop upload --message "report" ./a.txt ./b.pdf
+
+# 查看第 1 页记录
+cfdrop list --page 1
+
+# 以 JSON 输出记录
+cfdrop list --page 1 --json
+
+# 下载单个文件（按索引）
+cfdrop download --slug "<slug>" --index 0 --out .
+
+# 下载整条记录 tarball
+cfdrop download --slug "<slug>" --tarball --out .
+
+# 删除记录
+cfdrop delete --id 123
+```
+
+4. 配置优先级
+
+- 命令参数（如 `--server`、`--password`）
+- 环境变量（`CFDROP_SERVER`、`CFDROP_PASSWORD`）
+- 配置文件：`~/.config/cfdrop/config.json`
+
 ### 浏览器扩展
 
 
@@ -87,4 +135,3 @@ pnpm deploy
 2. 开启开发者模式
 3. 点击“加载已解压的扩展程序”
 4. 选择 `cf-drop/extension` 目录
-
