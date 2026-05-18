@@ -14,14 +14,13 @@ import { PopoverConfirm } from './PopoverConfirm';
 import { useLocale, useT } from '../store/locale';
 import { tError, type TranslationKey } from '../i18n';
 
-const recordTypeOptions: Array<{ value: RecordFilterType; labelKey: 'records.filterTypeAll' | 'records.filterTypeText' | 'records.filterTypeImage' | 'records.filterTypeDocument' | 'records.filterTypeArchive' | 'records.filterTypeAudio' | 'records.filterTypeOther' }> = [
+const recordTypeOptions: Array<{ value: RecordFilterType; labelKey: 'records.filterTypeAll' | 'records.filterTypeText' | 'records.filterTypeImage' | 'records.filterTypeDocument' | 'records.filterTypeArchive' | 'records.filterTypeAudio' }> = [
   { value: 'all', labelKey: 'records.filterTypeAll' },
   { value: 'text', labelKey: 'records.filterTypeText' },
   { value: 'image', labelKey: 'records.filterTypeImage' },
   { value: 'document', labelKey: 'records.filterTypeDocument' },
   { value: 'archive', labelKey: 'records.filterTypeArchive' },
   { value: 'audio', labelKey: 'records.filterTypeAudio' },
-  { value: 'other', labelKey: 'records.filterTypeOther' },
 ];
 
 type UploaderDeviceType = 'windows' | 'macos' | 'linux' | 'ios' | 'android' | 'ipados' | 'unknown';
@@ -41,6 +40,7 @@ const FILE_MENU_ESTIMATED_HEIGHT = 92;
 const FILE_MENU_GAP = 6;
 const FILE_MENU_VIEWPORT_PADDING = 8;
 const PAGE_SIZE_FALLBACK = 20;
+const VISIBLE_TYPE_COUNT = 4;
 const messageLinkifyOptions = {
   className: 'record-message-link',
   target: '_blank',
@@ -133,16 +133,30 @@ export const UploadRecords = memo(() => {
   const [selectedDate, setSelectedDate] = useState('');
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<RecordFilterType>('all');
-  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [showTypeOverflowMenu, setShowTypeOverflowMenu] = useState(false);
+  const [typeOverflowMenuOpen, setTypeOverflowMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [calendarCursor, setCalendarCursor] = useState(() => dayjs().startOf('month'));
   const hasCountKeyMountedRef = useRef(false);
+  const typeSegmentRef = useRef<HTMLDivElement>(null);
+  const typeMeasureRef = useRef<HTMLDivElement>(null);
+  const typeOverflowWrapRef = useRef<HTMLDivElement>(null);
   const dateMenuWrapRef = useRef<HTMLDivElement>(null);
   const dateMenuTriggerRef = useRef<HTMLButtonElement>(null);
-  const typeMenuWrapRef = useRef<HTMLDivElement>(null);
-  const typeMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const dateMenuId = useId();
-  const typeMenuId = useId();
+  const typeOverflowMenuId = useId();
+  const visibleTypeOptions = useMemo(
+    () => recordTypeOptions.slice(0, VISIBLE_TYPE_COUNT),
+    [],
+  );
+  const overflowTypeOptions = useMemo(
+    () => recordTypeOptions.slice(VISIBLE_TYPE_COUNT),
+    [],
+  );
+  const isSelectedTypeInOverflow = useMemo(
+    () => overflowTypeOptions.some((item) => item.value === selectedType),
+    [overflowTypeOptions, selectedType],
+  );
 
   const dateRange = useMemo(() => {
     if (!selectedDate) return null;
@@ -327,28 +341,20 @@ export const UploadRecords = memo(() => {
   }, [error, isLoading, isValidating]);
 
   useEffect(() => {
-    if (!typeMenuOpen && !dateMenuOpen) return;
+    if (!dateMenuOpen) return;
 
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      const clickInTypeMenu = typeMenuWrapRef.current?.contains(target);
       const clickInDateMenu = dateMenuWrapRef.current?.contains(target);
-      if (!clickInTypeMenu && !clickInDateMenu) {
-        setTypeMenuOpen(false);
+      if (!clickInDateMenu) {
         setDateMenuOpen(false);
       }
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (dateMenuOpen) {
-          setDateMenuOpen(false);
-          dateMenuTriggerRef.current?.focus();
-        }
-        if (typeMenuOpen) {
-          setTypeMenuOpen(false);
-          typeMenuTriggerRef.current?.focus();
-        }
+        setDateMenuOpen(false);
+        dateMenuTriggerRef.current?.focus();
       }
     };
 
@@ -358,7 +364,69 @@ export const UploadRecords = memo(() => {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [dateMenuOpen, typeMenuOpen]);
+  }, [dateMenuOpen]);
+
+  useEffect(() => {
+    const computeTypeOverflow = () => {
+      const segmentEl = typeSegmentRef.current;
+      const measureEl = typeMeasureRef.current;
+      if (!segmentEl || !measureEl) return;
+      if (!overflowTypeOptions.length) {
+        setShowTypeOverflowMenu(false);
+        return;
+      }
+
+      const allChipWidths = Array.from(
+        measureEl.querySelectorAll<HTMLElement>('.records-type-chip[data-measure-type="all"]'),
+      ).reduce((sum, item) => sum + item.offsetWidth, 0);
+      const overflowButtonWidth = measureEl.querySelector<HTMLElement>('.records-type-overflow-btn')?.offsetWidth || 0;
+      const gap = Number.parseFloat(window.getComputedStyle(segmentEl).columnGap || window.getComputedStyle(segmentEl).gap || '0') || 0;
+      const allChipsGap = Math.max(0, recordTypeOptions.length - 1) * gap;
+      const withMoreGap = visibleTypeOptions.length * gap;
+      const widthWhenOverflow = Array.from(
+        measureEl.querySelectorAll<HTMLElement>('.records-type-chip[data-measure-type="visible"]'),
+      ).reduce((sum, item) => sum + item.offsetWidth, 0) + overflowButtonWidth + withMoreGap;
+      const totalWidth = allChipWidths + allChipsGap;
+      const availableWidth = segmentEl.clientWidth;
+      const shouldOverflow = totalWidth > availableWidth && widthWhenOverflow <= availableWidth + 1;
+      setShowTypeOverflowMenu(shouldOverflow);
+      if (!shouldOverflow) {
+        setTypeOverflowMenuOpen(false);
+      }
+    };
+
+    computeTypeOverflow();
+    const segmentEl = typeSegmentRef.current;
+    if (!segmentEl) return;
+    const observer = new ResizeObserver(() => computeTypeOverflow());
+    observer.observe(segmentEl);
+    window.addEventListener('resize', computeTypeOverflow);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', computeTypeOverflow);
+    };
+  }, [overflowTypeOptions.length, t, visibleTypeOptions.length]);
+
+  useEffect(() => {
+    if (!typeOverflowMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!typeOverflowWrapRef.current?.contains(target)) {
+        setTypeOverflowMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTypeOverflowMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [typeOverflowMenuOpen]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -406,11 +474,9 @@ export const UploadRecords = memo(() => {
     const value = dayjs(selectedDate, 'YYYY-MM-DD');
     return value.isValid() ? value : null;
   }, [selectedDate]);
-  const dateTriggerLabel = selectedDateValue ? selectedDateValue.format('YYYY-MM-DD') : t('records.filterDateAll');
-  const selectedTypeOption = useMemo(
-    () => recordTypeOptions.find((item) => item.value === selectedType) || recordTypeOptions[0],
-    [selectedType],
-  );
+  const dateTriggerLabel = selectedDateValue
+    ? `${t('records.filterDateAria')}: ${selectedDateValue.format('YYYY-MM-DD')}`
+    : t('records.filterDateAll');
   const dateWeekLabels = locale === 'zh-CN'
     ? ['日', '一', '二', '三', '四', '五', '六']
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -459,11 +525,9 @@ export const UploadRecords = memo(() => {
   }, [currentPage, data, setSize, totalPages]);
   const handleRefresh = useCallback(() => {
     setDateMenuOpen(false);
-    setTypeMenuOpen(false);
     void refreshRecords();
   }, [refreshRecords]);
   const toggleDateMenu = useCallback(() => {
-    setTypeMenuOpen(false);
     setDateMenuOpen((prev) => {
       const next = !prev;
       if (next) {
@@ -525,22 +589,98 @@ export const UploadRecords = memo(() => {
 
   return (
     <>
-      <div className="records-toolbar">
-        <div className="records-filters">
+      <div className="records-filterbar">
+        <div className="records-type-segment-wrap">
+          <div ref={typeSegmentRef} className="records-type-segment" role="tablist" aria-label={t('records.filterTypeAria')}>
+            {(showTypeOverflowMenu ? visibleTypeOptions : recordTypeOptions).map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={item.value === selectedType}
+                className={`records-type-chip ${item.value === selectedType ? 'is-active' : ''}`}
+                onClick={() => {
+                  if (item.value === selectedType) return;
+                  setDateMenuOpen(false);
+                  setTypeOverflowMenuOpen(false);
+                  setIsListPending(true);
+                  setSelectedType(item.value);
+                }}
+              >
+                {t(item.labelKey)}
+              </button>
+            ))}
+            {showTypeOverflowMenu && (
+              <div ref={typeOverflowWrapRef} className="records-type-overflow-wrap">
+                <button
+                  type="button"
+                  className={`records-type-overflow-btn ${typeOverflowMenuOpen || isSelectedTypeInOverflow ? 'is-active' : ''} ${typeOverflowMenuOpen ? 'is-open' : ''}`}
+                  aria-label={t('records.filterTypeMore')}
+                  title={t('records.filterTypeMore')}
+                  aria-haspopup="listbox"
+                  aria-expanded={typeOverflowMenuOpen}
+                  aria-controls={typeOverflowMenuId}
+                  onClick={() => setTypeOverflowMenuOpen((prev) => !prev)}
+                >
+                  <i className="i-lucide-chevron-down" />
+                </button>
+                {typeOverflowMenuOpen && (
+                  <div id={typeOverflowMenuId} className="records-type-overflow-menu" role="listbox" aria-label={t('records.filterTypeAria')}>
+                    {overflowTypeOptions.map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        role="option"
+                        aria-selected={item.value === selectedType}
+                        className={`records-type-overflow-option ${item.value === selectedType ? 'is-active' : ''}`}
+                        onClick={() => {
+                          if (item.value !== selectedType) {
+                            setDateMenuOpen(false);
+                            setIsListPending(true);
+                            setSelectedType(item.value);
+                          }
+                          setTypeOverflowMenuOpen(false);
+                        }}
+                      >
+                        {t(item.labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div ref={typeMeasureRef} className="records-type-segment records-type-segment-measure" aria-hidden="true">
+            {recordTypeOptions.map((item) => (
+              <button key={`all-${item.value}`} type="button" className="records-type-chip" data-measure-type="all">
+                {t(item.labelKey)}
+              </button>
+            ))}
+            {visibleTypeOptions.map((item) => (
+              <button key={`visible-${item.value}`} type="button" className="records-type-chip" data-measure-type="visible">
+                {t(item.labelKey)}
+              </button>
+            ))}
+            <button type="button" className="records-type-overflow-btn" aria-hidden="true" tabIndex={-1}>
+              <i className="i-lucide-chevron-down" />
+            </button>
+          </div>
+        </div>
+        <div className="records-filter-actions">
           <label className="records-filter-field">
             <span className="sr-only">{t('records.filterDateAria')}</span>
-            <div className="records-filter-select-wrap records-date-picker-wrap" ref={dateMenuWrapRef}>
+            <div className="records-date-picker-wrap" ref={dateMenuWrapRef}>
               <button
                 ref={dateMenuTriggerRef}
                 type="button"
-                className={`records-filter-control records-filter-date-btn ${dateMenuOpen ? 'is-open' : ''}`}
+                className={`records-date-icon-btn ${dateMenuOpen ? 'is-open' : ''}`}
                 aria-label={t('records.filterDateAria')}
+                title={dateTriggerLabel}
                 aria-haspopup="dialog"
                 aria-expanded={dateMenuOpen}
                 aria-controls={dateMenuId}
                 onClick={toggleDateMenu}
               >
-                <span className={`records-filter-date-label ${selectedDateValue ? '' : 'is-placeholder'}`}>{dateTriggerLabel}</span>
                 <i className="i-lucide-calendar records-filter-date-icon" aria-hidden="true" />
               </button>
               {dateMenuOpen && (
@@ -593,115 +733,74 @@ export const UploadRecords = memo(() => {
               )}
             </div>
           </label>
-          <label className="records-filter-field">
-            <span className="sr-only">{t('records.filterTypeAria')}</span>
-            <div className="records-filter-select-wrap" ref={typeMenuWrapRef}>
-              <button
-                ref={typeMenuTriggerRef}
-                type="button"
-                className={`records-filter-control records-filter-select records-filter-select-btn ${typeMenuOpen ? 'is-open' : ''}`}
-                aria-label={t('records.filterTypeAria')}
-                aria-haspopup="listbox"
-                aria-expanded={typeMenuOpen}
-                aria-controls={typeMenuId}
-                onClick={() => {
-                  setDateMenuOpen(false);
-                  setTypeMenuOpen((prev) => !prev);
-                }}
-              >
-                <span className="records-filter-select-label">{t(selectedTypeOption.labelKey)}</span>
-                <i className="i-lucide-chevron-down records-filter-select-icon" aria-hidden="true" />
-              </button>
-              {typeMenuOpen && (
-                <div id={typeMenuId} role="listbox" className="records-type-menu">
-                {recordTypeOptions.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    role="option"
-                    className={`records-type-option ${item.value === selectedType ? 'is-active' : ''}`}
-                    aria-selected={item.value === selectedType}
-                    onClick={() => {
-                      setIsListPending(true);
-                      setSelectedType(item.value);
-                      setTypeMenuOpen(false);
-                      typeMenuTriggerRef.current?.focus();
-                    }}
-                  >
-                    <span className="records-type-option-label">{t(item.labelKey)}</span>
-                    {item.value === selectedType && <i className="i-lucide-check records-type-option-check" />}
-                  </button>
-                ))}
-                </div>
-              )}
+          <button
+            type="button"
+            className="records-refresh-btn"
+            aria-label={t('records.refreshAria')}
+            title={t('records.refreshAria')}
+            onClick={handleRefresh}
+          >
+            <i className="i-lucide-refresh-cw records-refresh-icon" />
+          </button>
+        </div>
+      </div>
+      <section className="records-panel">
+        <div className="records-list">
+          {error && (
+            <div className="records-error">
+              {t('common.errorWithMessage', { message: tError(locale, error.message) })}
             </div>
-          </label>
+          )}
+          {showRecordsLoading && (
+            <div className="records-loading" role="status" aria-live="polite">
+              <span className="records-loading-dot" aria-hidden="true" />
+              <span>{t('records.loading')}</span>
+            </div>
+          )}
+          {!error && !showRecordsLoading && totalPages === 0 && visiblePage.length === 0 && (
+            <div className="records-empty">{t('records.empty')}</div>
+          )}
+          {!error && !showRecordsLoading && visiblePage.length > 0 && (
+            <div className="records-page">
+              {visiblePage.map((record) => (
+                <UploadRecordItem
+                  key={record.id}
+                  record={record}
+                  onPreviewImage={openImagePreview}
+                  onDeleteRecord={handleDeleteRecord}
+                />
+              ))}
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          className="records-refresh-btn"
-          aria-label={t('records.refreshAria')}
-          title={t('records.refreshAria')}
-          onClick={handleRefresh}
-        >
-          <i className="i-lucide-refresh-cw records-refresh-icon" />
-        </button>
-      </div>
-      <div className="records-list">
-        {error && (
-          <div className="records-error">
-            {t('common.errorWithMessage', { message: tError(locale, error.message) })}
+        <div className="records-pagination-wrap">
+          <div className="records-pagination" role="navigation" aria-label={t('records.paginationAria')}>
+            <button
+              type="button"
+              className="records-page-btn"
+              onClick={handlePrevPage}
+              aria-label={t('records.paginationPrev')}
+              title={t('records.paginationPrev')}
+              disabled={currentPage <= 1 || isLoading || isValidating}
+            >
+              <i className="i-lucide-chevron-left records-page-btn-icon" />
+            </button>
+            <span className="records-pagination-status">
+              {t('records.paginationLabel', { current: displayCurrentPage, total: totalPages })}
+            </span>
+            <button
+              type="button"
+              className="records-page-btn"
+              onClick={handleNextPage}
+              aria-label={t('records.paginationNext')}
+              title={t('records.paginationNext')}
+              disabled={!totalPages || currentPage >= totalPages || isLoading || isValidating}
+            >
+              <i className="i-lucide-chevron-right records-page-btn-icon" />
+            </button>
           </div>
-        )}
-        {showRecordsLoading && (
-          <div className="records-loading" role="status" aria-live="polite">
-            <span className="records-loading-dot" aria-hidden="true" />
-            <span>{t('records.loading')}</span>
-          </div>
-        )}
-        {!error && !showRecordsLoading && totalPages === 0 && (
-          <div className="records-empty">{t('records.empty')}</div>
-        )}
-        {!error && !showRecordsLoading && visiblePage.length > 0 && (
-          <div className="records-page">
-            {visiblePage.map((record) => (
-              <UploadRecordItem
-                key={record.id}
-                record={record}
-                onPreviewImage={openImagePreview}
-                onDeleteRecord={handleDeleteRecord}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="records-pagination-wrap">
-        <div className="records-pagination" role="navigation" aria-label={t('records.paginationAria')}>
-          <button
-            type="button"
-            className="records-page-btn"
-            onClick={handlePrevPage}
-            aria-label={t('records.paginationPrev')}
-            title={t('records.paginationPrev')}
-            disabled={currentPage <= 1 || isLoading || isValidating}
-          >
-            <i className="i-lucide-chevron-left records-page-btn-icon" />
-          </button>
-          <span className="records-pagination-status">
-            {t('records.paginationLabel', { current: displayCurrentPage, total: totalPages })}
-          </span>
-          <button
-            type="button"
-            className="records-page-btn"
-            onClick={handleNextPage}
-            aria-label={t('records.paginationNext')}
-            title={t('records.paginationNext')}
-            disabled={!totalPages || currentPage >= totalPages || isLoading || isValidating}
-          >
-            <i className="i-lucide-chevron-right records-page-btn-icon" />
-          </button>
         </div>
-      </div>
+      </section>
       {previewOverlay}
     </>
   );
@@ -717,10 +816,19 @@ const UploadRecordItem = memo((props: {
   const [openFileMenu, setOpenFileMenu] = useState<OpenFileMenuState | null>(null);
   const openFileMenuRef = useRef<HTMLDivElement>(null);
   const openFileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const recordBodyRef = useRef<HTMLDivElement>(null);
+  const [isBodyScrollable, setIsBodyScrollable] = useState(false);
+  const [isBodyAtTop, setIsBodyAtTop] = useState(true);
+  const [isBodyAtBottom, setIsBodyAtBottom] = useState(true);
   const uploaderType = normalizeUploaderType(props.record.uploader);
   const uploaderLabel = t(uploaderDeviceLabelKeys[uploaderType]);
   const uploaderIcon = uploaderDeviceIcons[uploaderType];
   const recordTime = formatRecordTime(props.record.ctime, t);
+  const messageText = String(props.record.message || '');
+  const hasText = Boolean(messageText.trim());
+  const singleFile = props.record.files.length === 1 ? props.record.files[0] : null;
+  const canCopySingleImage = Boolean(singleFile) && !hasText && isImageRecordFile(singleFile) && isDesktopClipboardFileSupported();
+  const canDownloadRecord = props.record.files.length > 0;
   const handleCopy = useCallback((text: string) => {
     void copyToClipboard(text).then((copied) => {
       showGlobalMessage({
@@ -729,8 +837,43 @@ const UploadRecordItem = memo((props: {
       });
     });
   }, [t]);
+  const handleCopyRecord = useCallback(() => {
+    if (hasText) {
+      handleCopy(messageText);
+      return;
+    }
+    if (!canCopySingleImage || !singleFile) return;
 
-  const actionLink = 'record-action';
+    const imageLink = `/api/download/${props.record.slug}/0`;
+    void copyImageFileToClipboard(imageLink, singleFile.name).then((copied) => {
+      showGlobalMessage({
+        type: copied ? 'success' : 'error',
+        text: copied ? t('toast.copySuccess') : t('toast.copyFailed'),
+      });
+    });
+  }, [canCopySingleImage, handleCopy, hasText, messageText, props.record.slug, singleFile, t]);
+  const handleDownloadRecord = useCallback(() => {
+    if (!canDownloadRecord) return;
+    if (props.record.files.length === 1) {
+      triggerDownload(`/api/download/${props.record.slug}/0`, props.record.files[0].name);
+      return;
+    }
+    triggerDownload(`/api/download/${props.record.slug}/tarball`, `${props.record.id}.tar`);
+  }, [canDownloadRecord, props.record.files, props.record.id, props.record.slug]);
+  const updateRecordBodyScrollState = useCallback(() => {
+    const bodyEl = recordBodyRef.current;
+    if (!bodyEl) return;
+
+    const maxScrollTop = Math.max(0, bodyEl.scrollHeight - bodyEl.clientHeight);
+    const isScrollable = maxScrollTop > 1;
+    const atTop = bodyEl.scrollTop <= 1;
+    const atBottom = bodyEl.scrollTop >= maxScrollTop - 1;
+
+    setIsBodyScrollable(isScrollable);
+    setIsBodyAtTop(!isScrollable || atTop);
+    setIsBodyAtBottom(!isScrollable || atBottom);
+  }, []);
+
   const resolveFileMenuPosition = useCallback((triggerRect: DOMRect) => {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
@@ -787,55 +930,42 @@ const UploadRecordItem = memo((props: {
     };
   }, [openFileMenu]);
 
-  const meta = <div className="record-meta">
-    <span title={uploaderLabel}>
-      <i className={`${uploaderIcon} mr-1`}></i>
-      {uploaderLabel}
-    </span>
-    <span title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
-      <i className="i-lucide-clock mr-1"></i>
-      {recordTime}
-    </span>
-    {!!props.record.size && (
-      <span title={`${props.record.size} bytes`}>
-        <i className="i-lucide-database mr-1"></i>
-        {toReadableSize(props.record.size)}
-      </span>
-    )}
-  </div>;
+  useEffect(() => {
+    updateRecordBodyScrollState();
+    const bodyEl = recordBodyRef.current;
+    if (!bodyEl) return;
 
-  const actions = <div className="record-actions">
-    {!!props.record.message && (<>
-      <a className={actionLink} onClick={(e) => (e.preventDefault(), handleCopy(props.record.message))} href='#' role='button'>
-        <i className="i-lucide-copy record-action-icon"></i>
-        {t('records.copyText')}
-      </a>
-    </>)}
+    const onBodyScroll = () => {
+      updateRecordBodyScrollState();
+    };
 
-    {
-      props.record.files.length > 1 && (
-        <a
-          className={`${actionLink}`}
-          target="_blank"
-          rel="noreferrer"
-          href={`/api/download/${encodeURIComponent(props.record.slug)}/tarball`}
-          download={`${props.record.id}.tar`}
-        >
-          <i className="i-lucide-archive record-action-icon"></i>
-          {t('records.downloadAll')}
-        </a>
-      )
-    }
+    bodyEl.addEventListener('scroll', onBodyScroll, { passive: true });
+    const resizeObserver = new ResizeObserver(() => {
+      updateRecordBodyScrollState();
+    });
+    resizeObserver.observe(bodyEl);
+    window.addEventListener('resize', updateRecordBodyScrollState);
 
-    <PopoverConfirm onConfirm={() => props.onDeleteRecord(props.record.id)}>
-      <a
-        className={`${actionLink} record-action-danger`}
-        onClick={(e) => e.preventDefault()} href='#' role='button'>
-        <i className="i-lucide-trash-2 record-action-icon"></i>
-        {t('records.delete')}
-      </a>
-    </PopoverConfirm>
-  </div>;
+    return () => {
+      bodyEl.removeEventListener('scroll', onBodyScroll);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateRecordBodyScrollState);
+    };
+  }, [files.length, messageText, updateRecordBodyScrollState]);
+
+  const head = (
+    <div className="record-head">
+      <div className="record-head-main">
+        <div className="record-device-row">
+          <i className={`${uploaderIcon} record-device-icon`} aria-hidden="true"></i>
+          <span className="record-device-name" title={uploaderLabel}>{uploaderLabel}</span>
+        </div>
+        <div className="record-time-row" title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
+          {recordTime}
+        </div>
+      </div>
+    </div>
+  );
   const fileMenuOverlay = openFileMenu && typeof document !== 'undefined'
     ? createPortal(
       <div
@@ -874,108 +1004,140 @@ const UploadRecordItem = memo((props: {
       document.body,
     )
     : null;
+  const recordBodyClassName = [
+    'record-body',
+    isBodyScrollable ? 'is-scrollable' : '',
+    isBodyAtTop ? 'is-at-top' : '',
+    isBodyAtBottom ? 'is-at-bottom' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <>
-      <article className="record-card">
-        <div className="record-main">
-          <div className="record-fixed">
-            {meta}
-          </div>
-          <div className="record-scroll withScrollbar">
-            {!!props.record.message && (
-              <pre className="record-message">
-                <Linkify options={messageLinkifyOptions}>
-                  {props.record.message}
-                </Linkify>
-              </pre>
-            )}
-            {files.length > 0 && (
-              <div className="record-files">
-                {files.map((file, index) => {
-                  const link = `/api/download/${props.record.slug}/${index}`;
-                  const fileExt = getFileExt(file.name);
-                  const canPreviewImage = Boolean(file.thumbnail);
-                  const menuKey = `${props.record.id}-${index}`;
-                  const isMenuOpen = openFileMenu?.key === menuKey;
-                  return (
-                    <div key={file.path} className="record-file-item">
-                      <a
-                        href={link}
-                        target={canPreviewImage ? undefined : '_blank'}
-                        rel={canPreviewImage ? undefined : 'noreferrer'}
-                        title={file.name}
-                        className="record-file"
-                        onMouseDown={() => setOpenFileMenu(null)}
-                        onClick={canPreviewImage
-                          ? (event) => {
-                            event.preventDefault();
-                            props.onPreviewImage(link, file.name);
-                          }
-                          : undefined}
-                      >
-                        {file.thumbnail ? (
-                          <>
-                            <img src={file.thumbnail} className="record-file-thumb" />
-                            <div className="record-file-info">
-                              <div className="record-file-name">{file.name}</div>
-                              <div className="record-file-size-row">
-                                {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
-                                <span className="record-file-size">{toReadableSize(file.size)}</span>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="record-file-icon-wrap" aria-hidden="true">
-                              <i className="i-lucide-file record-file-icon"></i>
-                            </div>
-                            <div className="record-file-info">
-                              <div className="record-file-name">{file.name}</div>
-                              <div className="record-file-size-row">
-                                {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
-                                <span className="record-file-size">{toReadableSize(file.size)}</span>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </a>
-                      <button
-                        ref={isMenuOpen ? openFileMenuTriggerRef : undefined}
-                        type="button"
-                        className={`record-file-menu-trigger ${isMenuOpen ? 'is-open' : ''}`}
-                        aria-label={t('records.fileActionMenuAria')}
-                        title={t('records.fileActionMenuAria')}
-                        onClick={(event) => {
+      <article className="record-item">
+        {head}
+        <div ref={recordBodyRef} className={recordBodyClassName}>
+          {!!messageText && (
+            <pre className="record-message">
+              <Linkify options={messageLinkifyOptions}>
+                {messageText}
+              </Linkify>
+            </pre>
+          )}
+          {files.length > 0 && (
+            <div className="record-files">
+              {files.map((file, index) => {
+                const link = `/api/download/${props.record.slug}/${index}`;
+                const fileExt = getFileExt(file.name);
+                const canPreviewImage = Boolean(file.thumbnail);
+                const menuKey = `${props.record.id}-${index}`;
+                const isMenuOpen = openFileMenu?.key === menuKey;
+                return (
+                  <div key={file.path} className="record-file-item">
+                    <a
+                      href={link}
+                      target={canPreviewImage ? undefined : '_blank'}
+                      rel={canPreviewImage ? undefined : 'noreferrer'}
+                      title={file.name}
+                      className="record-file"
+                      onMouseDown={() => setOpenFileMenu(null)}
+                      onClick={canPreviewImage
+                        ? (event) => {
                           event.preventDefault();
-                          event.stopPropagation();
-                          if (isMenuOpen) {
-                            setOpenFileMenu(null);
-                            return;
-                          }
-                          const triggerRect = event.currentTarget.getBoundingClientRect();
-                          const { top, left, placement } = resolveFileMenuPosition(triggerRect);
-                          setOpenFileMenu({
-                            key: menuKey,
-                            link,
-                            fileName: file.name,
-                            top,
-                            left,
-                            placement,
-                          });
-                        }}
-                      >
-                        <i className="i-lucide-ellipsis-vertical" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                          props.onPreviewImage(link, file.name);
+                        }
+                        : undefined}
+                    >
+                      {file.thumbnail ? (
+                        <>
+                          <img src={file.thumbnail} className="record-file-thumb" />
+                          <div className="record-file-info">
+                            <div className="record-file-name">{file.name}</div>
+                            <div className="record-file-size-row">
+                              {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
+                              <span className="record-file-size">{toReadableSize(file.size)}</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="record-file-icon-wrap" aria-hidden="true">
+                            <i className="i-lucide-file record-file-icon"></i>
+                          </div>
+                          <div className="record-file-info">
+                            <div className="record-file-name">{file.name}</div>
+                            <div className="record-file-size-row">
+                              {!!fileExt && <span className="record-file-ext">{fileExt}</span>}
+                              <span className="record-file-size">{toReadableSize(file.size)}</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </a>
+                    <button
+                      ref={isMenuOpen ? openFileMenuTriggerRef : undefined}
+                      type="button"
+                      className={`record-file-menu-trigger ${isMenuOpen ? 'is-open' : ''}`}
+                      aria-label={t('records.fileActionMenuAria')}
+                      title={t('records.fileActionMenuAria')}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (isMenuOpen) {
+                          setOpenFileMenu(null);
+                          return;
+                        }
+                        const triggerRect = event.currentTarget.getBoundingClientRect();
+                        const { top, left, placement } = resolveFileMenuPosition(triggerRect);
+                        setOpenFileMenu({
+                          key: menuKey,
+                          link,
+                          fileName: file.name,
+                          top,
+                          left,
+                          placement,
+                        });
+                      }}
+                    >
+                      <i className="i-lucide-ellipsis-vertical" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="record-footer">
+          <div className="record-head-actions record-footer-actions">
+            <button
+              type="button"
+              className="record-head-action-btn"
+              aria-label={t('records.copyText')}
+              title={t('records.copyText')}
+              onClick={handleCopyRecord}
+            >
+              <i className="i-lucide-copy record-head-action-icon"></i>
+            </button>
+            <button
+              type="button"
+              className="record-head-action-btn"
+              aria-label={t('records.downloadAll')}
+              title={t('records.downloadAll')}
+              onClick={handleDownloadRecord}
+            >
+              <i className="i-lucide-download record-head-action-icon"></i>
+            </button>
+            <PopoverConfirm onConfirm={() => props.onDeleteRecord(props.record.id)}>
+              <button
+                type="button"
+                className="record-head-action-btn is-danger"
+                aria-label={t('records.delete')}
+                title={t('records.delete')}
+              >
+                <i className="i-lucide-trash-2 record-head-action-icon"></i>
+              </button>
+            </PopoverConfirm>
           </div>
         </div>
-
-        {actions}
       </article>
       {fileMenuOverlay}
     </>
@@ -1034,6 +1196,48 @@ function getFileExtLower(name: string) {
   return name.slice(dotIndex + 1).toLowerCase();
 }
 
+function isImageRecordFile(file: UploadRecord['files'][number]) {
+  const mime = String(file.type || '').toLowerCase();
+  const ext = getFileExtLower(file.name || '');
+  return mime.startsWith('image/') || Boolean(file.thumbnail) || IMAGE_FILE_EXTS.has(ext);
+}
+
+function isDesktopClipboardFileSupported() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = String(navigator.userAgent || '').toLowerCase();
+  if (/android|iphone|ipad|ipod|mobile/.test(ua)) return false;
+  return typeof navigator.clipboard?.write === 'function' && typeof ClipboardItem !== 'undefined';
+}
+
+async function copyImageFileToClipboard(link: string, filename: string) {
+  try {
+    const response = await fetch(link, { credentials: 'same-origin' });
+    if (!response.ok) return false;
+    const blob = await response.blob();
+    const type = blob.type || `image/${getFileExtLower(filename) || 'png'}`;
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [type]: blob,
+      }),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function triggerDownload(link: string, filename: string) {
+  if (typeof document === 'undefined') return;
+  const anchor = document.createElement('a');
+  anchor.href = link;
+  anchor.download = filename;
+  anchor.rel = 'noreferrer';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}
+
 function isDocumentMime(mime: string) {
   if (!mime) return false;
   if (mime.startsWith('text/')) return true;
@@ -1074,7 +1278,6 @@ function isTypeMatchedByFile(file: UploadRecord['files'][number], recordType: Ex
   if (recordType === 'document') return matchesDocument;
   if (recordType === 'archive') return matchesArchive;
   if (recordType === 'audio') return matchesAudio;
-  if (recordType === 'other') return !matchesImage && !matchesDocument && !matchesArchive && !matchesAudio;
 
   return false;
 }

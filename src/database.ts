@@ -44,7 +44,7 @@ export interface RecordFileItem {
   type?: string;
 }
 
-export const recordFilterTypes = ['all', 'text', 'image', 'document', 'archive', 'audio', 'other'] as const;
+export const recordFilterTypes = ['all', 'text', 'image', 'document', 'archive', 'audio'] as const;
 export type RecordFilterType = (typeof recordFilterTypes)[number];
 
 interface ListUploadRecordsOptions {
@@ -158,7 +158,6 @@ function isTypeMatchedByFile(file: RecordFileItem, recordType: Exclude<RecordFil
   if (recordType === 'document') return matchesDocument;
   if (recordType === 'archive') return matchesArchive;
   if (recordType === 'audio') return matchesAudio;
-  if (recordType === 'other') return !matchesImage && !matchesDocument && !matchesArchive && !matchesAudio;
 
   return false;
 }

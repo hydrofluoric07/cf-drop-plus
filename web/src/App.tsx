@@ -99,9 +99,7 @@ const App = () => {
           <ContentInput />
         </section>
 
-        <section className="records-panel">
-          <UploadRecords />
-        </section>
+        <UploadRecords />
       </main>
       <div className="app-grain" aria-hidden="true" />
       <div className="app-ruler" aria-hidden="true" />
@@ -240,6 +238,7 @@ function SimpleProgressBar() {
   const [progress] = useAtom(uploadingProgressAtom);
   const [error] = useAtom(uploadingErrorAtom);
   const translatedError = error ? tError(locale, error) : '';
+  const showProgress = Boolean(error) || progress > 0;
   const lastNotifiedErrorRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -256,6 +255,8 @@ function SimpleProgressBar() {
     });
     lastNotifiedErrorRef.current = error;
   }, [error, t, translatedError]);
+
+  if (!showProgress) return null;
 
   return (
     <div className="progress-wrap">
