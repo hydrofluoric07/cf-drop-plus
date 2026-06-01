@@ -24,6 +24,36 @@ export async function migrateTables(db: D1Database) {
     )
   `.replace(/\n/g, "")
   );
+
+  await db.exec(
+    `
+    CREATE TABLE IF NOT EXISTS share_record (
+      slug TEXT PRIMARY KEY,
+      record_slug TEXT NOT NULL,
+      ctime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `.replace(/\n/g, "")
+  );
+
+  await db.exec(
+    `
+    DELETE FROM share_record
+    WHERE slug NOT IN (
+      SELECT keep_slug
+      FROM (
+        SELECT (
+          SELECT s2.slug
+          FROM share_record s2
+          WHERE s2.record_slug = s1.record_slug
+          ORDER BY s2.ctime ASC, s2.slug ASC
+          LIMIT 1
+        ) AS keep_slug
+        FROM share_record s1
+        GROUP BY s1.record_slug
+      )
+    )
+  `.replace(/\n/g, "")
+  );
 }
 
 export interface UploadRecord {
@@ -44,6 +74,17 @@ export interface RecordFileItem {
   type?: string;
 }
 
+export interface ShareRecord {
+  slug: string;
+  recordSlug: string;
+  ctime: number;
+}
+
+export interface SharedUploadRecord {
+  record: UploadRecord;
+  share: ShareRecord;
+}
+
 export const recordFilterTypes = ['all', 'text', 'image', 'document', 'archive', 'audio'] as const;
 export type RecordFilterType = (typeof recordFilterTypes)[number];
 
@@ -59,6 +100,12 @@ interface CountUploadRecordsOptions {
   recordType?: RecordFilterType;
   dateFrom?: number;
   dateTo?: number;
+}
+
+interface ListShareRecordsOptions {
+  beforeCtime?: number;
+  beforeSlug?: string;
+  limit?: number;
 }
 
 const IMAGE_FILE_EXTS = new Set([
@@ -313,6 +360,135 @@ export async function getUploadRecordBySlug(db: D1Database, slug: string) {
   return fromDB(record);
 }
 
+function shareRecordFromDB(data: any): ShareRecord {
+  return {
+    slug: String(data.slug),
+    recordSlug: String(data.record_slug),
+    ctime: +new Date(data.ctime),
+  };
+}
+
+export async function getShareRecordByRecordSlug(db: D1Database, recordSlug: string) {
+  const row = await db
+    .prepare("SELECT slug, record_slug, ctime FROM share_record WHERE record_slug = ? ORDER BY ctime ASC, slug ASC LIMIT 1")
+    .bind(recordSlug)
+    .first<any>();
+  if (!row) return null;
+  return shareRecordFromDB(row);
+}
+
+export async function createShareRecord(db: D1Database, recordSlug: string) {
+  const existing = await getShareRecordByRecordSlug(db, recordSlug);
+  if (existing) return existing;
+
+  const slug = randomId();
+  await db
+    .prepare("INSERT INTO share_record (slug, record_slug) VALUES (?, ?)")
+    .bind(slug, recordSlug)
+    .run();
+
+  return await getShareRecordByRecordSlug(db, recordSlug) || {
+    slug,
+    recordSlug,
+    ctime: +new Date(),
+  };
+}
+
+export async function deleteShareRecord(db: D1Database, slug: string) {
+  await db
+    .prepare("DELETE FROM share_record WHERE slug = ?")
+    .bind(slug)
+    .run();
+}
+
+async function deleteShareRecordsByRecordSlug(db: D1Database, recordSlug: string) {
+  await db
+    .prepare("DELETE FROM share_record WHERE record_slug = ?")
+    .bind(recordSlug)
+    .run();
+}
+
+export async function getSharedUploadRecord(db: D1Database, slug: string): Promise<SharedUploadRecord | null> {
+  const row = await db
+    .prepare(
+      `SELECT
+        s.slug AS share_slug,
+        s.record_slug AS share_record_slug,
+        s.ctime AS share_ctime,
+        r.id,
+        r.slug,
+        r.uploader,
+        r.ctime,
+        r.size,
+        r.files,
+        r.message
+      FROM share_record s
+      INNER JOIN upload_record r ON r.slug = s.record_slug
+      WHERE s.slug = ?`
+    )
+    .bind(slug)
+    .first<any>();
+  if (!row) return null;
+
+  return {
+    share: shareRecordFromDB({
+      slug: row.share_slug,
+      record_slug: row.share_record_slug,
+      ctime: row.share_ctime,
+    }),
+    record: fromDB(row),
+  };
+}
+
+function sharedUploadRecordFromJoinedRow(row: any): SharedUploadRecord {
+  return {
+    share: shareRecordFromDB({
+      slug: row.share_slug,
+      record_slug: row.share_record_slug,
+      ctime: row.share_ctime,
+    }),
+    record: fromDB(row),
+  };
+}
+
+export async function listSharedUploadRecords(
+  db: D1Database,
+  opts: ListShareRecordsOptions = {}
+) {
+  const limit = Number.isInteger(opts.limit) && opts.limit! > 0 ? Math.min(opts.limit!, 100) : 20;
+  let sql = `SELECT
+    s.slug AS share_slug,
+    s.record_slug AS share_record_slug,
+    s.ctime AS share_ctime,
+    r.id,
+    r.slug,
+    r.uploader,
+    r.ctime,
+    r.size,
+    r.files,
+    r.message
+  FROM share_record s
+  INNER JOIN upload_record r ON r.slug = s.record_slug`;
+  const bindings: Array<string | number> = [];
+
+  if (Number.isFinite(opts.beforeCtime) && opts.beforeSlug) {
+    sql += " WHERE (s.ctime < ? OR (s.ctime = ? AND s.slug < ?))";
+    const cursorDate = new Date(opts.beforeCtime!).toISOString();
+    bindings.push(cursorDate, cursorDate, opts.beforeSlug);
+  }
+
+  sql += " ORDER BY s.ctime DESC, s.slug DESC LIMIT ?";
+  bindings.push(limit);
+
+  const rows = await db.prepare(sql).bind(...bindings).all<any>();
+  return (rows.results || []).map(sharedUploadRecordFromJoinedRow);
+}
+
+export async function countSharedUploadRecords(db: D1Database) {
+  const row = await db.prepare("SELECT COUNT(*) AS total FROM share_record").first<{ total: number }>();
+  return Number(row?.total || 0);
+}
+
 export function randomId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(-4);
 }
@@ -352,10 +528,11 @@ export async function purgeRecordsBeforeId(
 ) {
   // 1. fetch all ids and file
   const rows = await db
-    .prepare("SELECT id, files FROM upload_record WHERE id < ?")
+    .prepare("SELECT id, slug, files FROM upload_record WHERE id < ?")
     .bind(beforeId)
     .all<UploadRecord>();
   const ids = rows.results.map((row) => row.id);
+  if (!ids.length) return;
 
   // 2. delete files
   for (const row of rows.results) {
@@ -365,7 +542,12 @@ export async function purgeRecordsBeforeId(
   }
 
   // 3. delete records
-  await db.prepare(`DELETE FROM upload_record WHERE id IN (${ids})`).run();
+  const recordSlugs = rows.results.map((row) => String(row.slug));
+  const slugPlaceholders = recordSlugs.map(() => "?").join(",");
+  await db.prepare(`DELETE FROM share_record WHERE record_slug IN (${slugPlaceholders})`).bind(...recordSlugs).run();
+
+  const idPlaceholders = ids.map(() => "?").join(",");
+  await db.prepare(`DELETE FROM upload_record WHERE id IN (${idPlaceholders})`).bind(...ids).run();
 
   return;
 }
@@ -386,5 +568,50 @@ export async function deleteRecord(
   } catch {}
 
   // 3. delete record
+  await deleteShareRecordsByRecordSlug(db, record.slug);
   await db.prepare(`DELETE FROM upload_record WHERE id = ?`).bind(id).run();
+}
+
+export async function deleteRecordFile(
+  db: D1Database,
+  id: number,
+  index: number,
+  deleteFiles: (path: string[]) => Promise<void>
+): Promise<{ deletedRecord: boolean; record?: UploadRecord } | null> {
+  const record = await getUploadRecord(db, id);
+  if (!record) return null;
+
+  const file = record.files[index];
+  if (!file) return null;
+
+  await deleteFiles([file.path]);
+
+  const files = record.files.filter((_, itemIndex) => itemIndex !== index);
+  const shouldDeleteRecord = !files.length && !String(record.message || "").trim();
+  if (shouldDeleteRecord) {
+    await deleteShareRecordsByRecordSlug(db, record.slug);
+    await db.prepare(`DELETE FROM upload_record WHERE id = ?`).bind(id).run();
+    return { deletedRecord: true };
+  }
+
+  const size = files.reduce((total, item) => total + Number(item.size || 0), 0);
+  const updating = toDB({
+    ...record,
+    files,
+    size,
+  });
+
+  await db
+    .prepare("UPDATE upload_record SET files = ?, size = ? WHERE id = ?")
+    .bind(updating.files, updating.size, id)
+    .run();
+
+  return {
+    deletedRecord: false,
+    record: {
+      ...record,
+      files,
+      size,
+    },
+  };
 }

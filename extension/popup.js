@@ -3,11 +3,15 @@ const mainPanelEl = document.getElementById('mainPanel');
 const appFrameEl = document.getElementById('appFrame');
 const statusEl = document.getElementById('status');
 const goSetupBtn = document.getElementById('goSetupBtn');
-const openOptionsBtn = document.getElementById('openOptionsBtn');
-const themeToggleBtn = document.getElementById('themeToggleBtn');
-const logoutBtn = document.getElementById('logoutBtn');
 const LAST_FRAME_CACHE_KEY = 'cf_drop_popup_last_frame_v1';
 const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
+const EXTENSION_REQUEST_ACTIONS = new Set([
+  'ext:listInstances',
+  'ext:upsertInstance',
+  'ext:removeInstance',
+  'ext:setActiveInstance',
+  'ext:testConnection',
+]);
 const systemThemeMedia = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
   ? window.matchMedia(SYSTEM_THEME_QUERY)
   : null;
@@ -18,13 +22,6 @@ let activeThemeMode = 'system';
 let currentFrameBaseUrl = '';
 
 goSetupBtn?.addEventListener('click', openOptionsPage);
-openOptionsBtn?.addEventListener('click', openOptionsPage);
-themeToggleBtn?.addEventListener('click', () => {
-  void handleThemeToggle();
-});
-logoutBtn?.addEventListener('click', () => {
-  postToFrame('cf-drop-ext-logout');
-});
 appFrameEl?.addEventListener('load', () => {
   if (isMainPanelVisible()) {
     postToFrame('cf-drop-ext-theme-set', {
@@ -97,7 +94,6 @@ async function init() {
 function showSetup(message) {
   setupNoticeEl.classList.remove('hidden');
   mainPanelEl.classList.add('hidden');
-  toggleActionButtons(false);
   currentFrameBaseUrl = '';
   if (message) setStatus(message, true);
 }
@@ -105,7 +101,6 @@ function showSetup(message) {
 function showMain() {
   setupNoticeEl.classList.add('hidden');
   mainPanelEl.classList.remove('hidden');
-  toggleActionButtons(true);
 }
 
 function loadFrame(baseUrl, locale, theme) {
@@ -135,26 +130,48 @@ function postToFrame(type, payload = {}) {
 
 function handleFrameMessage(event) {
   if (event.source !== appFrameEl.contentWindow) return;
-  if (event.data?.type === 'cf-drop-ext-open-options') {
+  const type = String(event.data?.type || '');
+  if (type === 'cf-drop-ext-open-options') {
     openOptionsPage();
+    return;
+  }
+  if (type === 'cf-drop-ext-locale-set') {
+    void handleFrameLocaleSet(event.data?.locale);
+    return;
+  }
+  if (type === 'cf-drop-ext-theme-set') {
+    void handleFrameThemeSet(event.data?.themeMode || event.data?.theme);
+    return;
+  }
+  if (type === 'cf-drop-ext-request') {
+    void handleExtensionRequest(event.data || {});
   }
 }
 
-function toggleActionButtons(enabled) {
-  const disabled = !enabled;
-  if (themeToggleBtn) themeToggleBtn.disabled = false;
-  if (logoutBtn) logoutBtn.disabled = disabled;
+async function handleExtensionRequest(data) {
+  const requestId = String(data.requestId || '');
+  const action = String(data.action || '');
+  if (!requestId || !EXTENSION_REQUEST_ACTIONS.has(action)) {
+    appFrameEl.contentWindow?.postMessage({
+      type: 'cf-drop-ext-response',
+      requestId,
+      ok: false,
+      error: 'Unsupported extension request',
+    }, '*');
+    return;
+  }
+
+  const res = await sendMessage(action, data.payload || {});
+  appFrameEl.contentWindow?.postMessage({
+    type: 'cf-drop-ext-response',
+    requestId,
+    ...res,
+  }, '*');
 }
 
-async function handleThemeToggle() {
-  activeThemeMode = getNextThemeMode(activeThemeMode);
+async function handleFrameThemeSet(theme) {
+  activeThemeMode = normalizeThemeMode(theme);
   applyPopupTheme(activeThemeMode);
-  if (isMainPanelVisible()) {
-    postToFrame('cf-drop-ext-theme-set', {
-      theme: activeThemeMode,
-      themeMode: activeThemeMode,
-    });
-  }
   if (currentFrameBaseUrl) {
     writeLastFrameCache({
       baseUrl: currentFrameBaseUrl,
@@ -166,6 +183,22 @@ async function handleThemeToggle() {
   const res = await sendMessage('ext:setTheme', { theme: activeThemeMode });
   if (!res.ok) {
     setStatus(`主题保存失败：${res.error}`, true);
+  }
+}
+
+async function handleFrameLocaleSet(locale) {
+  activeLocale = normalizeLocale(locale);
+  if (currentFrameBaseUrl) {
+    writeLastFrameCache({
+      baseUrl: currentFrameBaseUrl,
+      locale: activeLocale,
+      themeMode: activeThemeMode,
+    });
+  }
+
+  const res = await sendMessage('ext:setLocale', { locale: activeLocale });
+  if (!res.ok) {
+    setStatus(`语言保存失败：${res.error}`, true);
   }
 }
 
@@ -187,12 +220,6 @@ function normalizeThemeMode(value) {
 function resolveTheme(themeMode) {
   if (themeMode === 'light' || themeMode === 'dark') return themeMode;
   return systemThemeMedia?.matches ? 'dark' : 'light';
-}
-
-function getNextThemeMode(themeMode) {
-  if (themeMode === 'system') return 'light';
-  if (themeMode === 'light') return 'dark';
-  return 'system';
 }
 
 function normalizeLocale(value) {

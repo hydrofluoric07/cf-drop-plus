@@ -2,7 +2,7 @@ name = "cf-drop"
 main = "src/index.ts"
 compatibility_date = "2025-01-02"
 
-assets = { directory = "web/dist", binding = "ASSETS" }
+assets = { directory = "web/dist", binding = "ASSETS", not_found_handling = "single-page-application" }
 # compatibility_flags = [ "nodejs_compat" ]
 
 [[d1_databases]]

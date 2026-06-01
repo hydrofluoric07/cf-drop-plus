@@ -7,6 +7,8 @@ const KvDefaults = {
   inputText: '',
   locale: '',
   themeMode: 'system',
+  lightBgColor: '#f4f4f5',
+  darkBgColor: '#1a1a17',
 }
 
 export type KvKey = keyof typeof KvDefaults;

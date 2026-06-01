@@ -2,9 +2,15 @@ import { Hono } from "hono";
 // import { parseMultipartRequest } from '@mjackson/multipart-parser';
 import {
   countUploadRecords,
+  countSharedUploadRecords,
+  createShareRecord,
   createUploadRecord,
   deleteRecord,
+  deleteRecordFile,
+  deleteShareRecord,
+  getSharedUploadRecord,
   listUploadRecords,
+  listSharedUploadRecords,
   getUploadRecordBySlug,
   migrateTables,
   purgeRecordsBeforeId,
@@ -285,6 +291,56 @@ app.get("/api/list/count", authWithPassword, async (c) => {
   });
 });
 
+app.get("/api/share/list", authWithPassword, async (c) => {
+  const beforeCtime = parseTimestamp(c.req.query("beforeCtime"));
+  const beforeSlug = c.req.query("beforeSlug");
+  const list = await listSharedUploadRecords(c.env.DB, {
+    beforeCtime,
+    beforeSlug,
+    limit: 20,
+  });
+  return c.json(list);
+});
+
+app.get("/api/share/list/count", authWithPassword, async (c) => {
+  const pageSize = 20;
+  const total = await countSharedUploadRecords(c.env.DB);
+  const totalPages = Math.ceil(total / pageSize);
+
+  return c.json({
+    total,
+    pageSize,
+    totalPages,
+  });
+});
+
+app.get("/api/share/:slug", async (c) => {
+  await ensureTablesMigrated(c.env.DB);
+  const slug = c.req.param("slug");
+  const shared = await getSharedUploadRecord(c.env.DB, slug);
+  if (!shared) return c.notFound();
+  return c.json(shared);
+});
+
+app.post("/api/share", authWithPassword, async (c) => {
+  await ensureTablesMigrated(c.env.DB);
+  const body = await c.req.json();
+  const recordSlug = String(body.recordSlug || "");
+  const record = await getUploadRecordBySlug(c.env.DB, recordSlug);
+  if (!record) return c.notFound();
+  const share = await createShareRecord(c.env.DB, record.slug);
+  return c.json({ share });
+});
+
+app.post("/api/share/delete", authWithPassword, async (c) => {
+  await ensureTablesMigrated(c.env.DB);
+  const body = await c.req.json();
+  const slug = String(body.slug || "");
+  if (!slug) return c.notFound();
+  await deleteShareRecord(c.env.DB, slug);
+  return c.json({ ok: true });
+});
+
 const timingMiddleware: H = async (c, next) => {
   const start = Date.now();
   const resp = await next();
@@ -513,7 +569,7 @@ function isIfNoneMatchMatched(ifNoneMatch: string | undefined, etag: string) {
 }
 
 function resolveStaticCacheControl(pathname: string) {
-  if (pathname === "/" || pathname === "/index.html") {
+  if (pathname === "/" || pathname === "/index.html" || pathname === "/settings") {
     return "no-cache";
   }
   if (pathname === "/sw.js") {
@@ -606,6 +662,19 @@ app.post("/api/delete", authWithPassword, async (c) => {
   const id = +body.id;
   await deleteRecord(c.env.DB, id, (paths) => c.env.MY_BUCKET.delete(paths));
   return c.json({ ok: true });
+});
+
+app.post("/api/delete-file", authWithPassword, async (c) => {
+  const body = await c.req.json();
+  const id = +body.id;
+  const index = +body.index;
+  if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(index) || index < 0) {
+    return c.notFound();
+  }
+
+  const result = await deleteRecordFile(c.env.DB, id, index, (paths) => c.env.MY_BUCKET.delete(paths));
+  if (!result) return c.notFound();
+  return c.json({ ok: true, ...result });
 });
 
 app.post("/api/purge", authWithPassword, async (c) => {

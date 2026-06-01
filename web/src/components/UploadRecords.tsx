@@ -30,6 +30,7 @@ interface OpenFileMenuState {
   key: string;
   link: string;
   fileName: string;
+  fileIndex: number;
   top: number;
   left: number;
   placement: FileMenuPlacement;
@@ -137,7 +138,9 @@ export const UploadRecords = memo(() => {
   const [typeOverflowMenuOpen, setTypeOverflowMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [calendarCursor, setCalendarCursor] = useState(() => dayjs().startOf('month'));
+  const [deletingFileRecordIds, setDeletingFileRecordIds] = useState<Set<number>>(() => new Set());
   const hasCountKeyMountedRef = useRef(false);
+  const deletingFileRecordIdsRef = useRef(new Set<number>());
   const typeSegmentRef = useRef<HTMLDivElement>(null);
   const typeMeasureRef = useRef<HTMLDivElement>(null);
   const typeOverflowWrapRef = useRef<HTMLDivElement>(null);
@@ -247,6 +250,16 @@ export const UploadRecords = memo(() => {
       revalidate: false,
     });
   }, [mutateCount]);
+  const setRecordFileDeleting = useCallback((recordId: number, deleting: boolean) => {
+    const next = new Set(deletingFileRecordIdsRef.current);
+    if (deleting) {
+      next.add(recordId);
+    } else {
+      next.delete(recordId);
+    }
+    deletingFileRecordIdsRef.current = next;
+    setDeletingFileRecordIds(next);
+  }, []);
   const applyCreatedRecord = useCallback((record: UploadRecord) => {
     if (!isRecordMatchedCurrentFilter(record)) return;
 
@@ -304,6 +317,58 @@ export const UploadRecords = memo(() => {
         }
       });
   }, [countData, data, isRecordMatchedCurrentFilter, mutate, mutateCount, mutateCountBy]);
+  const handleDeleteRecordFile = useCallback((recordId: number, fileIndex: number) => {
+    if (deletingFileRecordIdsRef.current.has(recordId)) return;
+    setRecordFileDeleting(recordId, true);
+
+    const originalRecord = data?.flat().find((item) => item.id === recordId);
+
+    fetchAPI('/api/delete-file', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: recordId, index: fileIndex }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('error.unknown');
+        return res.json() as Promise<{ ok?: boolean; deletedRecord?: boolean; record?: UploadRecord }>;
+      })
+      .then((resp) => {
+        if (!resp?.ok) throw new Error('error.unknown');
+
+        const updatedRecord = resp.record;
+        const nextMatches = Boolean(updatedRecord && !resp.deletedRecord && isRecordMatchedCurrentFilter(updatedRecord));
+        const shouldRemoveRecord = Boolean(resp.deletedRecord || !updatedRecord || !nextMatches);
+
+        void mutate((pages?: UploadRecord[][]) => {
+          if (!pages) return pages;
+          return pages.map((page) => {
+            if (shouldRemoveRecord) {
+              return page.filter((item) => item.id !== recordId);
+            }
+            return page.map((item) => (item.id === recordId ? updatedRecord! : item));
+          });
+        }, {
+          revalidate: false,
+        });
+
+        const previousMatches = Boolean(originalRecord && isRecordMatchedCurrentFilter(originalRecord));
+        if (previousMatches && !nextMatches) {
+          mutateCountBy(-1);
+        }
+      })
+      .catch((err) => {
+        console.error('delete file failed', err);
+        showGlobalMessage({
+          type: 'error',
+          text: t('records.fileDeleteFailed'),
+        });
+      })
+      .finally(() => {
+        setRecordFileDeleting(recordId, false);
+      });
+  }, [data, isRecordMatchedCurrentFilter, mutate, mutateCountBy, setRecordFileDeleting, t]);
 
   useEffect(() => {
     const refresh = () => {
@@ -763,11 +828,14 @@ export const UploadRecords = memo(() => {
           {!error && !showRecordsLoading && visiblePage.length > 0 && (
             <div className="records-page">
               {visiblePage.map((record) => (
-                <UploadRecordItem
+                <UploadRecordCard
                   key={record.id}
                   record={record}
                   onPreviewImage={openImagePreview}
                   onDeleteRecord={handleDeleteRecord}
+                  onDeleteRecordFile={handleDeleteRecordFile}
+                  isDeletingRecordFile={deletingFileRecordIds.has(record.id)}
+                  mode="manage"
                 />
               ))}
             </div>
@@ -806,12 +874,20 @@ export const UploadRecords = memo(() => {
   );
 });
 
-const UploadRecordItem = memo((props: {
+export const UploadRecordCard = memo((props: {
   record: UploadRecord;
   onPreviewImage: (src: string, name: string) => void;
-  onDeleteRecord: (id: number) => void;
+  onDeleteRecord?: (id: number) => void;
+  onDeleteRecordFile?: (recordId: number, fileIndex: number) => void;
+  isDeletingRecordFile?: boolean;
+  mode?: 'manage' | 'share';
+  shareSlug?: string;
+  shareCreatedAt?: number;
+  onDeleteShare?: (slug: string) => Promise<void>;
 }) => {
   const t = useT();
+  const mode = props.mode || 'manage';
+  const isManageMode = mode === 'manage';
   const files = useMemo(() => props.record.files || [], [props.record.files]);
   const [openFileMenu, setOpenFileMenu] = useState<OpenFileMenuState | null>(null);
   const openFileMenuRef = useRef<HTMLDivElement>(null);
@@ -820,15 +896,24 @@ const UploadRecordItem = memo((props: {
   const [isBodyScrollable, setIsBodyScrollable] = useState(false);
   const [isBodyAtTop, setIsBodyAtTop] = useState(true);
   const [isBodyAtBottom, setIsBodyAtBottom] = useState(true);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [isDeletingShare, setIsDeletingShare] = useState(false);
   const uploaderType = normalizeUploaderType(props.record.uploader);
   const uploaderLabel = t(uploaderDeviceLabelKeys[uploaderType]);
   const uploaderIcon = uploaderDeviceIcons[uploaderType];
   const recordTime = formatRecordTime(props.record.ctime, t);
+  const shareCreatedTime = props.shareCreatedAt
+    ? t('share.createdAt', { time: formatRecordTime(props.shareCreatedAt, t) })
+    : '';
   const messageText = String(props.record.message || '');
   const hasText = Boolean(messageText.trim());
   const singleFile = props.record.files.length === 1 ? props.record.files[0] : null;
   const canCopySingleImage = Boolean(singleFile) && !hasText && isImageRecordFile(singleFile) && isDesktopClipboardFileSupported();
   const canDownloadRecord = props.record.files.length > 0;
+  const canManageShare = mode === 'share' && Boolean(props.shareSlug && props.onDeleteShare);
+  const shareUrl = props.shareSlug && typeof window !== 'undefined'
+    ? new URL(`/share/${props.shareSlug}`, window.location.origin).toString()
+    : '';
   const handleCopy = useCallback((text: string) => {
     void copyToClipboard(text).then((copied) => {
       showGlobalMessage({
@@ -860,6 +945,55 @@ const UploadRecordItem = memo((props: {
     }
     triggerDownload(`/api/download/${props.record.slug}/tarball`, `${props.record.id}.tar`);
   }, [canDownloadRecord, props.record.files, props.record.id, props.record.slug]);
+  const handleShareRecord = useCallback(() => {
+    fetchAPI('/api/share', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recordSlug: props.record.slug }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('share create failed');
+        return res.json() as Promise<{ share?: { slug?: string } }>;
+      })
+      .then((resp) => {
+        const shareSlug = resp.share?.slug;
+        if (!shareSlug) throw new Error('share create failed');
+        const absoluteUrl = new URL(`/share/${shareSlug}`, window.location.origin).toString();
+        return copyToClipboard(absoluteUrl);
+      })
+      .then((copied) => {
+        showGlobalMessage({
+          type: copied ? 'success' : 'error',
+          text: copied ? t('toast.copySuccess') : t('toast.copyFailed'),
+        });
+      })
+      .catch(() => {
+        showGlobalMessage({
+          type: 'error',
+          text: t('share.createFailed'),
+        });
+      });
+  }, [props.record.slug, t]);
+  const handleCopyShareLink = useCallback(() => {
+    if (!shareUrl) return;
+    handleCopy(shareUrl);
+  }, [handleCopy, shareUrl]);
+  const handleDeleteShare = useCallback(() => {
+    if (!props.shareSlug || !props.onDeleteShare || isDeletingShare) return;
+    setIsDeletingShare(true);
+    props.onDeleteShare(props.shareSlug)
+      .then(() => {
+        setShareDialogOpen(false);
+      })
+      .catch(() => {
+        // Parent handler owns the user-facing error toast.
+      })
+      .finally(() => {
+        setIsDeletingShare(false);
+      });
+  }, [isDeletingShare, props.onDeleteShare, props.shareSlug]);
   const updateRecordBodyScrollState = useCallback(() => {
     const bodyEl = recordBodyRef.current;
     if (!bodyEl) return;
@@ -953,16 +1087,55 @@ const UploadRecordItem = memo((props: {
     };
   }, [files.length, messageText, updateRecordBodyScrollState]);
 
+  useEffect(() => {
+    if (!shareDialogOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShareDialogOpen(false);
+      }
+    };
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [shareDialogOpen]);
+
   const head = (
     <div className="record-head">
       <div className="record-head-main">
-        <div className="record-device-row">
-          <i className={`${uploaderIcon} record-device-icon`} aria-hidden="true"></i>
-          <span className="record-device-name" title={uploaderLabel}>{uploaderLabel}</span>
-        </div>
-        <div className="record-time-row" title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
-          {recordTime}
-        </div>
+        {isManageMode ? (
+          <>
+            <div className="record-device-row">
+              <i className={`${uploaderIcon} record-device-icon`} aria-hidden="true"></i>
+              <span className="record-device-name" title={uploaderLabel}>{uploaderLabel}</span>
+            </div>
+            <div className="record-time-row" title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
+              {recordTime}
+            </div>
+          </>
+        ) : (
+          <div className="record-share-head-row">
+            <div className="record-time-row" title={props.shareCreatedAt ? dayjs(props.shareCreatedAt).format('YYYY-MM-DD HH:mm:ss') : ''}>
+              {shareCreatedTime}
+            </div>
+            {canManageShare && (
+              <button
+                type="button"
+                className="record-head-action-btn record-share-manage-btn"
+                aria-label={t('share.manageAria')}
+                title={t('share.manageAria')}
+                onClick={() => setShareDialogOpen(true)}
+              >
+                <i className="i-lucide-pencil record-head-action-icon"></i>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -986,20 +1159,71 @@ const UploadRecordItem = memo((props: {
         >
           {t('records.fileActionDownload')}
         </a>
-        <button
-          type="button"
-          className="record-file-menu-item"
-          role="menuitem"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setOpenFileMenu(null);
-            const absoluteUrl = new URL(openFileMenu.link, window.location.origin).toString();
-            handleCopy(absoluteUrl);
-          }}
-        >
-          {t('records.fileActionShare')}
-        </button>
+        {isManageMode && props.onDeleteRecordFile && (
+          <button
+            type="button"
+            className="record-file-menu-item is-danger"
+            role="menuitem"
+            disabled={props.isDeletingRecordFile}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (props.isDeletingRecordFile) return;
+              const fileIndex = openFileMenu.fileIndex;
+              setOpenFileMenu(null);
+              props.onDeleteRecordFile?.(props.record.id, fileIndex);
+            }}
+          >
+            {t('records.fileActionDelete')}
+          </button>
+        )}
+      </div>,
+      document.body,
+    )
+    : null;
+  const shareManageDialog = shareDialogOpen && canManageShare && shareUrl && typeof document !== 'undefined'
+    ? createPortal(
+      <div className="share-manage-mask" role="dialog" aria-modal="true" aria-label={t('share.manageTitle')} onClick={() => setShareDialogOpen(false)}>
+        <section className="share-manage-dialog" onClick={(event) => event.stopPropagation()}>
+          <header className="share-manage-head">
+            <h2 className="share-manage-title">{t('share.manageTitle')}</h2>
+            <button
+              type="button"
+              className="share-manage-close"
+              aria-label={t('common.close')}
+              onClick={() => setShareDialogOpen(false)}
+            >
+              <i className="i-lucide-x share-manage-icon" />
+            </button>
+          </header>
+          <div className="share-manage-body">
+            <div className="share-manage-label">{t('share.linkLabel')}</div>
+            <div className="share-manage-link-row">
+              <a href={shareUrl} target="_blank" rel="noreferrer" className="share-manage-link" title={shareUrl}>
+                {shareUrl}
+              </a>
+              <button
+                type="button"
+                className="share-manage-copy"
+                aria-label={t('share.copyLinkAria')}
+                title={t('share.copyLinkAria')}
+                onClick={handleCopyShareLink}
+              >
+                <i className="i-lucide-copy share-manage-icon" />
+              </button>
+            </div>
+          </div>
+          <footer className="share-manage-footer">
+            <button
+              type="button"
+              className="share-manage-delete"
+              disabled={isDeletingShare}
+              onClick={handleDeleteShare}
+            >
+              {t('share.delete')}
+            </button>
+          </footer>
+        </section>
       </div>,
       document.body,
     )
@@ -1092,6 +1316,7 @@ const UploadRecordItem = memo((props: {
                           key: menuKey,
                           link,
                           fileName: file.name,
+                          fileIndex: index,
                           top,
                           left,
                           placement,
@@ -1108,15 +1333,17 @@ const UploadRecordItem = memo((props: {
         </div>
         <div className="record-footer">
           <div className="record-head-actions record-footer-actions">
-            <button
-              type="button"
-              className="record-head-action-btn"
-              aria-label={t('records.copyText')}
-              title={t('records.copyText')}
-              onClick={handleCopyRecord}
-            >
-              <i className="i-lucide-copy record-head-action-icon"></i>
-            </button>
+            {isManageMode && (
+              <button
+                type="button"
+                className="record-head-action-btn"
+                aria-label={t('records.copyText')}
+                title={t('records.copyText')}
+                onClick={handleCopyRecord}
+              >
+                <i className="i-lucide-copy record-head-action-icon"></i>
+              </button>
+            )}
             <button
               type="button"
               className="record-head-action-btn"
@@ -1126,20 +1353,34 @@ const UploadRecordItem = memo((props: {
             >
               <i className="i-lucide-download record-head-action-icon"></i>
             </button>
-            <PopoverConfirm onConfirm={() => props.onDeleteRecord(props.record.id)}>
-              <button
-                type="button"
-                className="record-head-action-btn is-danger"
-                aria-label={t('records.delete')}
-                title={t('records.delete')}
-              >
-                <i className="i-lucide-trash-2 record-head-action-icon"></i>
-              </button>
-            </PopoverConfirm>
+            {isManageMode && (
+              <>
+                <PopoverConfirm onConfirm={() => props.onDeleteRecord?.(props.record.id)}>
+                  <button
+                    type="button"
+                    className="record-head-action-btn is-danger"
+                    aria-label={t('records.delete')}
+                    title={t('records.delete')}
+                  >
+                    <i className="i-lucide-trash-2 record-head-action-icon"></i>
+                  </button>
+                </PopoverConfirm>
+                <button
+                  type="button"
+                  className="record-head-action-btn"
+                  aria-label={t('records.share')}
+                  title={t('records.share')}
+                  onClick={handleShareRecord}
+                >
+                  <i className="i-lucide-share-2 record-head-action-icon"></i>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </article>
       {fileMenuOverlay}
+      {shareManageDialog}
     </>
   );
 });
