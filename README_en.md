@@ -1,23 +1,19 @@
 <p align="center"><img src="./web/public/icon.svg" width="64" alt="cf-drop logo"></p>
-<h1 align="center">cf-drop</h1>
-<p align="center">Private File/Text Box on Cloudflare Workers</p>
+<h1 align="center">cf-drop-plus</h1>
+<p align="center">Private file transfer assistant on Cloudflare Workers</p>
 <p align="center"><a href="./README.md">中文</a> | <strong>English</strong></p>
 
 ---
 
 ## Overview
 
-`cf-drop` is a lightweight private dropbox deployed on Cloudflare Workers. It supports text/file uploads, record browsing, file download/sharing, and password-protected access by default.
-<table width="100%">
-<tr>
-<td>
-<img src="./phone.png" width="300">
-</td>
-<td>
+`cf-drop-plus` is a lightweight file transfer assistant deployed on Cloudflare Workers, modified from [lyonbot/cf-drop](https://github.com/lyonbot/cf-drop). It supports text/file uploads, record browsing, file download/sharing, and password-protected access by default.
 
-</td>
-</tr>
-</table>
+<div style="">
+<img src="./images/mobile.png" width="300" alt="cf-drop mobile view">
+
+</div>
+
 ## Quick Start
 
 Prerequisites:
@@ -45,8 +41,8 @@ Copy-Item wrangler.toml.example wrangler.toml
 3. Create Cloudflare resources
 
 ```bash
-npx wrangler d1 create cf-drop
-npx wrangler r2 bucket create cf-drop
+npx wrangler d1 create cf-drop --location=apac
+npx wrangler r2 bucket create cf-drop --location=apac
 ```
 
 4. Edit `wrangler.toml`
@@ -122,6 +118,8 @@ cfdrop delete --id 123
 - CLI options (`--server`, `--password`)
 - Environment variables (`CFDROP_SERVER`, `CFDROP_PASSWORD`)
 - Config file: `~/.config/cfdrop/config.json`
+
+## Browser Extension
 
 Load locally (Chrome / Edge):
 

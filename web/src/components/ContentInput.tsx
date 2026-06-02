@@ -17,6 +17,7 @@ export const ContentInput = memo(() => {
   const hideDragMaskTimerRef = useRef<number | null>(null);
 
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       // Handle pasted files
@@ -141,18 +142,20 @@ export const ContentInput = memo(() => {
     removeFile(id);
   });
 
+  const hasContent = Boolean(text.trim() || files.length);
   const handleSend = useConsistCallback(() => {
+    if (!hasContent) return;
     startUpload();
   });
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) {
-        startUpload();
+        handleSend();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [startUpload]);
+  }, [handleSend]);
 
   const doClear = useConsistCallback(() => {
     setText('');
@@ -169,7 +172,7 @@ export const ContentInput = memo(() => {
         }
       }}
     >
-      <div className="composer-input-row">
+      <div className={`composer-input-row ${isExpanded ? 'is-expanded' : ''}`}>
         <textarea
           ref={textAreaRef}
           value={text}
@@ -177,26 +180,52 @@ export const ContentInput = memo(() => {
           className="composer-textarea"
           placeholder={t('composer.placeholder')}
         />
-      </div>
+        <button
+          type="button"
+          className="composer-expand-btn"
+          aria-label={t(isExpanded ? 'composer.collapse' : 'composer.expand')}
+          title={t(isExpanded ? 'composer.collapse' : 'composer.expand')}
+          onClick={() => setIsExpanded((prev) => !prev)}
+        >
+          <i className={isExpanded ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'}></i>
+        </button>
+        <div className="composer-toolbar">
+          <div className="composer-toolbar-left">
+            <button
+              type="button"
+              className="composer-tool-btn"
+              onClick={openFilePicker}
+              aria-label={t('composer.addFile')}
+              title={t('composer.addFile')}
+              key="addFileBtn"
+            >
+              <i className="i-lucide-plus"></i>
+            </button>
 
-      <div className="composer-toolbar">
-        <div className="composer-toolbar-left">
-          <button className="btn btn-ghost composer-tool-btn" onClick={openFilePicker} key="addFileBtn">
-            <i className="i-lucide-folder-plus"></i>
-            {t('composer.addFile')}
-          </button>
+            <button
+              type="button"
+              onClick={doClear}
+              className="composer-tool-btn"
+              aria-label={t('composer.clear')}
+              title={t('composer.clear')}
+              key="clearBtn"
+            >
+              <i className="i-lucide-eraser"></i>
+            </button>
+          </div>
 
-          <button onClick={doClear} className="btn btn-ghost composer-tool-btn" key="clearBtn">
-            <i className="i-lucide-eraser"></i>
-            {t('composer.clear')}
-          </button>
-        </div>
-
-        <div className="composer-toolbar-right">
-          <button className="btn btn-primary composer-send composer-tool-btn" onClick={handleSend} disabled={!text && !files.length}>
-            <i className="i-lucide-send"></i>
-            <span>{t('composer.send')}</span>
-          </button>
+          <div className="composer-toolbar-right">
+            <button
+              type="button"
+              className="composer-send composer-tool-btn"
+              onClick={handleSend}
+              aria-label={t('composer.send')}
+              title={t('composer.send')}
+            >
+              <i className="i-lucide-send"></i>
+              <span className="composer-send-label">{t('composer.send')}</span>
+            </button>
+          </div>
         </div>
       </div>
 

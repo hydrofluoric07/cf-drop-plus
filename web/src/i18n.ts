@@ -76,10 +76,12 @@ const zhCN = {
   'common.yes': '确认',
   'common.close': '关闭',
 
-  'composer.placeholder': '在这里输入文本，或粘贴 / 拖拽文件...',
+  'composer.placeholder': '在这里输入文本，或拖拽文件...',
   'composer.addFile': '添加文件',
   'composer.clear': '清空',
   'composer.send': '发送',
+  'composer.expand': '展开输入框',
+  'composer.collapse': '收起输入框',
   'composer.dropFiles': '松开以上传文件',
 
   'records.errorPrefix': '错误',
@@ -214,10 +216,12 @@ const en = {
   'common.yes': 'Yes',
   'common.close': 'Close',
 
-  'composer.placeholder': 'Type text here, or paste / drop files...',
+  'composer.placeholder': 'Type text here, or drop files...',
   'composer.addFile': 'Add file',
   'composer.clear': 'Clear',
   'composer.send': 'Send',
+  'composer.expand': 'Expand composer',
+  'composer.collapse': 'Collapse composer',
   'composer.dropFiles': 'Drop files to upload',
 
   'records.errorPrefix': 'Error',

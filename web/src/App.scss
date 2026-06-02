@@ -31,6 +31,7 @@
   --topbar-control-bg-open: rgba(255, 255, 255, 0.96);
   --topbar-control-line: rgba(30, 30, 24, 0.14);
   --topbar-control-line-strong: rgba(30, 30, 24, 0.24);
+  --topbar-active-indicator: #000;
   --records-filter-bg: color-mix(in srgb, var(--bg) 94%, var(--surface) 6%);
   --records-filter-line: rgba(138, 138, 138, 0.34);
   --records-filter-line-hover: rgba(120, 120, 120, 0.48);
@@ -49,6 +50,8 @@
   --record-card-line: rgba(0, 0, 0, 0.1);
   --record-fixed-fade-start: rgba(255, 255, 255, 0.94);
   --record-fixed-fade-end: rgba(255, 255, 255, 0);
+  --composer-toolbar-bg: rgba(255, 255, 255, 1);
+  --composer-toolbar-fade-end: rgba(255, 255, 255, 0);
   --record-file-bg: var(--record-card-bg);
   --record-file-hover-bg: color-mix(in srgb, var(--record-card-bg) 94%, var(--bg) 6%);
   --record-file-hover-line: #b8b8b0;
@@ -112,6 +115,7 @@
   --topbar-control-bg-open: rgba(41, 41, 35, 0.96);
   --topbar-control-line: rgba(255, 255, 255, 0.14);
   --topbar-control-line-strong: rgba(255, 255, 255, 0.24);
+  --topbar-active-indicator: #fff;
   --records-filter-bg: #2c2c2a;
   --records-filter-line: rgba(255, 255, 255, 0.14);
   --records-filter-line-hover: rgba(255, 255, 255, 0.28);
@@ -130,6 +134,8 @@
   --record-card-line: rgba(255, 255, 255, 0.12);
   --record-fixed-fade-start: rgba(30, 31, 37, 0.96);
   --record-fixed-fade-end: rgba(30, 31, 37, 0);
+  --composer-toolbar-bg: rgba(37, 37, 33, 1);
+  --composer-toolbar-fade-end: rgba(37, 37, 33, 0);
   --record-file-bg: var(--record-card-bg);
   --record-file-hover-bg: color-mix(in srgb, var(--record-card-bg) 92%, var(--bg) 8%);
   --record-file-hover-line: #5a584f;
@@ -439,7 +445,7 @@ html[data-theme='light'] .app-topbar {
 }
 
 .app-nav-link.is-active::after {
-  background: #2f62ff;
+  background: var(--topbar-active-indicator);
 }
 
 .app-message-layer {
@@ -1035,21 +1041,59 @@ html[data-theme='dark'] .app-topbar .theme-trigger.is-open {
 }
 
 .composer-input-row {
+  position: relative;
   display: block;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.composer-input-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: 14px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.composer-input-row::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  height: 3.35rem;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(0deg, var(--composer-toolbar-bg) 0%, var(--composer-toolbar-bg) calc(100% - 0.55rem), var(--composer-toolbar-fade-end) 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .composer-textarea {
+  position: relative;
+  z-index: 0;
   width: 100%;
-  min-height: 96px;
-  max-height: 280px;
-  resize: vertical;
+  height: 153px;
+  min-height: 153px;
+  max-height: none;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border-radius: 14px;
   border-color: color-mix(in srgb, var(--line) 88%, transparent);
   padding: 0.82rem 0.92rem;
+  padding-right: 2.35rem;
   font-size: 0.94rem;
   line-height: 1.6;
+  padding-bottom: 3.25rem;
   background: color-mix(in srgb, var(--surface) 90%, var(--bg) 10%);
   box-shadow: var(--composer-textarea-inner-shadow);
+}
+
+.composer-textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .composer-textarea::placeholder {
@@ -1069,45 +1113,99 @@ html[data-theme='dark'] .composer-textarea:focus-visible {
   background: #252521;
 }
 
-.composer-send {
-  min-width: 92px;
+.composer-input-row.is-expanded .composer-textarea {
+  height: 220px;
+  min-height: 220px;
+}
+
+.composer-expand-btn {
+  position: absolute;
+  top: 0.54rem;
+  right: 0.62rem;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  padding: 0;
+}
+
+.composer-expand-btn:hover:not(:disabled),
+.composer-expand-btn:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  transform: none;
+}
+
+.composer-expand-btn:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+  outline: 2px solid color-mix(in srgb, var(--text) 18%, transparent);
+  outline-offset: 2px;
+}
+
+.composer-expand-btn i {
+  width: 0.92rem;
+  height: 0.92rem;
+  flex-shrink: 0;
 }
 
 .composer-toolbar {
+  position: absolute;
+  left: 0.58rem;
+  right: 0.58rem;
+  bottom: 0.52rem;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
   min-width: 0;
+  pointer-events: none;
 }
 
 .composer-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.36rem;
   flex: 1 1 auto;
   min-width: 0;
+  pointer-events: auto;
 }
 
 .composer-toolbar-right {
   margin-left: auto;
   min-width: 0;
+  pointer-events: auto;
 }
 
+.composer-send,
 .composer-tool-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.42rem;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   min-height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  padding: 0;
   line-height: 1;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .composer-tool-btn i {
@@ -1116,8 +1214,47 @@ html[data-theme='dark'] .composer-textarea:focus-visible {
   flex-shrink: 0;
 }
 
-html[data-theme='light'] .composer-toolbar-left .btn.btn-ghost.composer-tool-btn:hover:not(:disabled) {
-  background: #efefef;
+.composer-tool-btn:hover:not(:disabled),
+.composer-tool-btn:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  transform: none;
+}
+
+.composer-tool-btn:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+  outline: 2px solid color-mix(in srgb, var(--text) 18%, transparent);
+  outline-offset: 2px;
+}
+
+.composer-tool-btn:disabled {
+  opacity: 0.42;
+}
+
+.composer-send {
+  width: auto;
+  min-width: 72px;
+  padding: 0 0.68rem;
+  gap: 0.38rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg) 12%);
+  color: var(--text);
+}
+
+.composer-send:hover:not(:disabled),
+.composer-send:active:not(:disabled) {
+  border-color: var(--line-hover);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.composer-send-label {
+  font-size: 0.84rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .composer-files {
@@ -1955,6 +2092,7 @@ button.records-date-icon-btn.is-open:hover:not(:disabled) {
 }
 
 .record-device-name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1965,6 +2103,13 @@ button.records-date-icon-btn.is-open:hover:not(:disabled) {
   font-weight: 400;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.record-device-row .record-time-row {
+  flex-shrink: 0;
+  margin-top: 0;
+  font-size: 0.74rem;
+  white-space: nowrap;
 }
 
 .record-time-row {
@@ -2534,6 +2679,7 @@ button.records-date-icon-btn.is-open:hover:not(:disabled) {
   img,
   [role='button'],
   .composer-tool-btn,
+  .composer-expand-btn,
   .records-type-chip,
   .records-type-overflow-btn,
   .records-date-icon-btn,
@@ -2577,7 +2723,7 @@ button.records-date-icon-btn.is-open:hover:not(:disabled) {
   }
 
   .app-brand {
-    font-size: 1.1rem;
+    font-size: 1.36rem;
   }
 
   .app-root.is-extension-mode .app-brand {
@@ -2810,18 +2956,22 @@ button.records-date-icon-btn.is-open:hover:not(:disabled) {
   }
 
   .composer-textarea {
-    min-height: 92px;
-    max-height: 240px;
+    height: 120px;
+    min-height: 120px;
+    max-height: none;
+  }
+
+  .composer-input-row.is-expanded .composer-textarea {
+    height: 180px;
+    min-height: 180px;
   }
 
   .composer-toolbar {
     align-items: center;
-    flex-wrap: wrap;
     min-width: 0;
   }
 
   .composer-toolbar-left {
-    flex-wrap: wrap;
     min-width: 0;
     flex: 1 1 auto;
   }
@@ -2835,13 +2985,13 @@ button.records-date-icon-btn.is-open:hover:not(:disabled) {
 
   .composer-send {
     width: auto;
-    min-width: 0;
+    min-width: 72px;
     min-height: 32px;
     flex-shrink: 0;
   }
 
   .composer-tool-btn {
-    min-width: 0;
+    min-width: 32px;
   }
 
   .record-file-item {

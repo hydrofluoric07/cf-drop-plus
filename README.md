@@ -1,6 +1,6 @@
 <p align="center"><img src="./web/public/icon.svg" width="64" alt="cf-drop logo"></p>
-<h1 align="center">cf-drop</h1>
-<p align="center">云端私有文件/文本投递箱</p>
+<h1 align="center">cf-drop-plus</h1>
+<p align="center">云端私有文件传输助手</p>
 <p align="center"><strong>中文</strong> | <a href="./README_en.md">English</a></p>
 
 ---
@@ -9,17 +9,12 @@
 
 ### 项目简介
 
-`cf-drop` 是一个部署在 Cloudflare Workers 上的轻量私有投递箱，支持文本与文件上传、记录查看、文件下载与分享，默认通过密码保护访问。
-<table width="100%">
-<tr>
-<td>
-<img src="./phone.png" width="300">
-</td>
-<td>
+`cf-drop-plus` 是一个部署在 Cloudflare Workers 上的轻量文件传输助手，基于 [lyonbot/cf-drop](https://github.com/lyonbot/cf-drop) 修改，支持文本与文件上传、记录查看、文件下载与分享，默认通过密码保护访问。
 
-</td>
-</tr>
-</table>
+<div style="">
+<img src="./images/mobile.png" width="300" alt="cf-drop mobile view">
+
+</div>
 
 ### 快速开始
 
@@ -48,8 +43,8 @@ Copy-Item wrangler.toml.example wrangler.toml
 3. 创建 Cloudflare 资源
 
 ```bash
-npx wrangler d1 create cf-drop
-npx wrangler r2 bucket create cf-drop
+npx wrangler d1 create cf-drop --location=apac
+npx wrangler r2 bucket create cf-drop --location=apac
 ```
 
 4. 编辑 `wrangler.toml`

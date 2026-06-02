@@ -1109,15 +1109,13 @@ export const UploadRecordCard = memo((props: {
     <div className="record-head">
       <div className="record-head-main">
         {isManageMode ? (
-          <>
-            <div className="record-device-row">
-              <i className={`${uploaderIcon} record-device-icon`} aria-hidden="true"></i>
-              <span className="record-device-name" title={uploaderLabel}>{uploaderLabel}</span>
-            </div>
+          <div className="record-device-row">
+            <i className={`${uploaderIcon} record-device-icon`} aria-hidden="true"></i>
+            <span className="record-device-name" title={uploaderLabel}>{uploaderLabel}</span>
             <div className="record-time-row" title={dayjs(props.record.ctime).format('YYYY-MM-DD HH:mm:ss')}>
               {recordTime}
             </div>
-          </>
+          </div>
         ) : (
           <div className="record-share-head-row">
             <div className="record-time-row" title={props.shareCreatedAt ? dayjs(props.shareCreatedAt).format('YYYY-MM-DD HH:mm:ss') : ''}>
