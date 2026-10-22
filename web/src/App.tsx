@@ -235,8 +235,9 @@ const App = () => {
             <div className="app-topbar-inner">
               <a
                 href={HOME_PATH}
-                className="app-brand"
+                className="app-brand notranslate"
                 aria-label="cf-drop"
+                translate="no"
                 onClick={(event) => {
                   if (!shouldHandleAppNavigation(event)) return;
                   event.preventDefault();
