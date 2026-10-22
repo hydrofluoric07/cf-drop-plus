@@ -2,16 +2,20 @@ import { atom, useAtom } from 'jotai';
 import KvStore from '../database/kv';
 import { store } from '.';
 
-export const themeModes = ['system', 'light', 'dark'] as const;
+export const themeModes = ['classic', 'light', 'dark', 'system'] as const;
 export type ThemeMode = (typeof themeModes)[number];
 const THEME_STORAGE_KEY = 'cf-drop:theme-mode';
+const APPEARANCE_STORAGE_KEY = 'cf-drop:appearance-v1';
 const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
 
-export const themeModeAtom = atom<ThemeMode>('system');
+export const themeModeAtom = atom<ThemeMode>('classic');
 
 const themeInitPromise = (async () => {
+  // A new appearance preference defaults everyone to Classic once. Subsequent
+  // choices (including the original Light/Dark/System modes) are preserved.
   const localTheme = readThemeFromLocalStorage();
-  const persistedTheme = localTheme ?? normalizeThemeMode(await KvStore.themeMode.get());
+  const savedAppearance = await KvStore.appearance.get();
+  const persistedTheme = localTheme ?? (isThemeMode(savedAppearance) ? savedAppearance : 'classic');
 
   store.set(themeModeAtom, persistedTheme);
   applyTheme(persistedTheme);
@@ -22,6 +26,7 @@ const themeInitPromise = (async () => {
     applyTheme(current);
     writeThemeToLocalStorage(current);
     KvStore.themeMode.setDebounced(current);
+    KvStore.appearance.setDebounced(current);
   });
   bindSystemThemeListener();
 
@@ -36,11 +41,8 @@ export function useThemeMode() {
   return useAtom(themeModeAtom);
 }
 
-function normalizeThemeMode(input?: string | null): ThemeMode {
-  if (input === 'system' || input === 'light' || input === 'dark') {
-    return input;
-  }
-  return 'system';
+function isThemeMode(input: unknown): input is ThemeMode {
+  return themeModes.some((mode) => mode === input);
 }
 
 function applyTheme(themeMode: ThemeMode) {
@@ -49,14 +51,18 @@ function applyTheme(themeMode: ThemeMode) {
   const root = document.documentElement;
   root.dataset.theme = resolved;
   root.dataset.themeMode = themeMode;
+  root.dataset.skin = themeMode === 'classic' ? 'classic' : 'plus';
   root.style.colorScheme = resolved;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute(
+    'content', themeMode === 'classic' ? '#859F3D' : resolved === 'dark' ? '#1a1a17' : '#ffffff',
+  );
 }
 
 function readThemeFromLocalStorage(): ThemeMode | null {
   if (typeof window === 'undefined') return null;
   try {
-    const value = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return value === 'system' || value === 'dark' || value === 'light' ? value : null;
+    const value = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
+    return isThemeMode(value) ? value : null;
   } catch {
     return null;
   }
@@ -65,14 +71,16 @@ function readThemeFromLocalStorage(): ThemeMode | null {
 function writeThemeToLocalStorage(theme: ThemeMode) {
   if (typeof window === 'undefined') return;
   try {
+    window.localStorage.setItem(APPEARANCE_STORAGE_KEY, theme);
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch {
-    // ignore storage access errors
+    // Ignore storage access errors; the current session still has its theme.
   }
 }
 
 function resolveTheme(themeMode: ThemeMode): 'light' | 'dark' {
-  if (themeMode === 'light' || themeMode === 'dark') return themeMode;
+  if (themeMode === 'classic' || themeMode === 'light') return 'light';
+  if (themeMode === 'dark') return 'dark';
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
   return window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
 }
@@ -81,15 +89,11 @@ function bindSystemThemeListener() {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
   const media = window.matchMedia(SYSTEM_THEME_QUERY);
   const onSystemThemeChange = () => {
-    if (store.get(themeModeAtom) !== 'system') return;
-    applyTheme('system');
+    if (store.get(themeModeAtom) === 'system') applyTheme('system');
   };
-
   if (typeof media.addEventListener === 'function') {
     media.addEventListener('change', onSystemThemeChange);
     return;
   }
-  if (typeof media.addListener === 'function') {
-    media.addListener(onSystemThemeChange);
-  }
+  if (typeof media.addListener === 'function') media.addListener(onSystemThemeChange);
 }

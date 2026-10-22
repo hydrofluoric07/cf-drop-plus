@@ -18,7 +18,7 @@ const systemThemeMedia = typeof window !== 'undefined' && typeof window.matchMed
 
 let activeInstance = null;
 let activeLocale = 'zh-CN';
-let activeThemeMode = 'system';
+let activeThemeMode = 'classic';
 let currentFrameBaseUrl = '';
 
 goSetupBtn?.addEventListener('click', openOptionsPage);
@@ -211,14 +211,16 @@ function applyPopupTheme(themeMode) {
 }
 
 function normalizeThemeMode(value) {
-  if (value === 'system' || value === 'dark' || value === 'light') {
+  if (value === 'classic' || value === 'system' || value === 'dark' || value === 'light') {
     return value;
   }
-  return 'system';
+  return 'classic';
 }
 
 function resolveTheme(themeMode) {
-  if (themeMode === 'light' || themeMode === 'dark') return themeMode;
+  if (themeMode === 'classic' || themeMode === 'light' || themeMode === 'dark') {
+    return themeMode === 'dark' ? 'dark' : 'light';
+  }
   return systemThemeMedia?.matches ? 'dark' : 'light';
 }
 

@@ -7,6 +7,7 @@ const KvDefaults = {
   inputText: '',
   locale: '',
   themeMode: 'system',
+  appearance: 'classic',
   lightBgColor: '#f4f4f5',
   darkBgColor: '#1a1a17',
 }

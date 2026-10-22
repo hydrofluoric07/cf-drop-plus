@@ -1,4 +1,5 @@
 import './App.scss';
+import './Classic.scss';
 import { ContentInput } from './components/ContentInput';
 import { UploadRecordCard, UploadRecords } from './components/UploadRecords';
 import { PasswordInput } from './components/PasswordInput';
@@ -8,7 +9,7 @@ import { uploadingErrorAtom, uploadingProgressAtom } from './store/uploading';
 import { useLocale, useT } from './store/locale';
 import { localeOptions, tError, resolveLocale } from './i18n';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ThemeMode, useThemeMode } from './store/theme';
+import { themeModes, ThemeMode, useThemeMode } from './store/theme';
 import { useBackgroundColors, normalizeHexColor } from './store/background';
 import { fetchAPI, logout, passwordAtom } from './store/auth';
 import { globalMessageAtom, hideGlobalMessage, showGlobalMessage } from './store';
@@ -405,28 +406,71 @@ function LanguageSwitcher() {
 function ThemeSwitcher() {
   const t = useT();
   const [themeMode, setThemeMode] = useThemeMode();
-  const icon = themeMode === 'dark'
-    ? 'i-lucide-moon'
-    : themeMode === 'light'
-      ? 'i-lucide-sun'
-      : 'i-lucide-monitor';
-  const themeLabel = themeMode === 'system'
-    ? t('theme.system')
-    : themeMode === 'light'
-      ? t('theme.light')
-      : t('theme.dark');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuWrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const labels = {
+    classic: t('theme.classic'), light: t('theme.light'),
+    dark: t('theme.dark'), system: t('theme.system'),
+  };
+  const icons = {
+    classic: 'i-lucide-palette', light: 'i-lucide-sun',
+    dark: 'i-lucide-moon', system: 'i-lucide-monitor',
+  };
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuWrapRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   return (
-    <div className="topbar-option-wrap">
+    <div className="topbar-option-wrap" ref={menuWrapRef}>
       <button
+        ref={triggerRef}
         type="button"
-        className="theme-trigger"
-        aria-label={t('theme.switchAria')}
-        title={themeLabel}
-        onClick={() => setThemeMode(getNextThemeMode(themeMode))}
+        className={`theme-trigger ${menuOpen ? 'is-open' : ''}`}
+        aria-label={t('theme.menuAria')}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title={labels[themeMode]}
+        onClick={() => setMenuOpen((open) => !open)}
       >
-        <i className={`${icon} theme-trigger-icon`} />
+        <i className={`${icons[themeMode]} theme-trigger-icon`} aria-hidden="true" />
       </button>
+      {menuOpen && (
+        <div className="topbar-option-menu appearance-menu" role="menu" aria-label={t('theme.menuAria')}>
+          {themeModes.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={`topbar-option-item ${themeMode === mode ? 'is-active' : ''}`}
+              role="menuitemradio"
+              aria-checked={themeMode === mode}
+              onClick={() => {
+                setThemeMode(mode);
+                setMenuOpen(false);
+                triggerRef.current?.focus();
+              }}
+            >
+              <i className={`${icons[mode]} theme-trigger-icon`} aria-hidden="true" />
+              {labels[mode]}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1145,16 +1189,15 @@ function SimpleProgressBar() {
 export default App;
 
 function resolveThemeMode(input: unknown): ThemeMode | null {
-  if (input === 'system' || input === 'light' || input === 'dark') {
+  if (input === 'classic' || input === 'system' || input === 'light' || input === 'dark') {
     return input;
   }
   return null;
 }
 
 function getNextThemeMode(current: ThemeMode): ThemeMode {
-  if (current === 'system') return 'light';
-  if (current === 'light') return 'dark';
-  return 'system';
+  const index = themeModes.indexOf(current);
+  return themeModes[(index + 1) % themeModes.length];
 }
 
 async function copyToClipboard(text: string) {

@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'cf_drop_extension_config_v1';
 const SUPPORTED_LOCALES = ['zh-CN', 'en'];
 const DEFAULT_LOCALE = 'zh-CN';
-const SUPPORTED_THEMES = ['system', 'light', 'dark'];
-const DEFAULT_THEME = 'system';
+const SUPPORTED_THEMES = ['classic', 'light', 'dark', 'system'];
+const DEFAULT_THEME = 'classic';
 
 const DEFAULT_CONFIG = {
   activeInstanceId: '',

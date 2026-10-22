@@ -193,7 +193,7 @@ export const ContentInput = memo(() => {
           <div className="composer-toolbar-left">
             <button
               type="button"
-              className="composer-tool-btn"
+              className="composer-tool-btn composer-add"
               onClick={openFilePicker}
               aria-label={t('composer.addFile')}
               title={t('composer.addFile')}
@@ -205,7 +205,7 @@ export const ContentInput = memo(() => {
             <button
               type="button"
               onClick={doClear}
-              className="composer-tool-btn"
+              className="composer-tool-btn composer-clear"
               aria-label={t('composer.clear')}
               title={t('composer.clear')}
               key="clearBtn"

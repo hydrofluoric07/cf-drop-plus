@@ -4,13 +4,14 @@
     <script>
       (function () {
         try {
-          var raw = localStorage.getItem('cf-drop:theme-mode');
-          var mode = raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
+          var raw = localStorage.getItem('cf-drop:appearance-v1');
+          var mode = raw === 'classic' || raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'classic';
           var isDark = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var theme = mode === 'system' ? (isDark ? 'dark' : 'light') : mode;
+          var theme = mode === 'classic' ? 'light' : mode === 'system' ? (isDark ? 'dark' : 'light') : mode;
           var root = document.documentElement;
           root.dataset.theme = theme;
           root.dataset.themeMode = mode;
+          root.dataset.skin = mode === 'classic' ? 'classic' : 'plus';
           root.style.colorScheme = theme;
         } catch (_err) {
           // ignore storage access errors

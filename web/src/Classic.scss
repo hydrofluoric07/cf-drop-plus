@@ -1,0 +1,146 @@
+// Scoped to the new Classic preset. Original Plus Light/Dark/System styles
+// remain in App.scss and are not overridden when another preset is selected.
+.appearance-menu { min-width: 170px; }
+.appearance-menu .topbar-option-item { display: flex; align-items: center; gap: 0.6rem; }
+
+html[data-skin='classic'] {
+  --classic-brand: #859f3d;
+  --classic-ink: #5c732b;
+  --classic-tint: #edf2e3;
+  --classic-blue: #486d8c;
+  --classic-blue-tint: #edf3f8;
+  --classic-warm: #886b51;
+  --classic-warm-tint: #f6f0e9;
+  --bg: #edf0f2;
+  --bg-shade: #edf0f2;
+  --surface-soft: #f7f8f9;
+  --surface-hover: #f1f4f6;
+  --line: #dce2e6;
+  --line-hover: #bcc9d1;
+  --line-strong: #859f3d;
+  --text: #30393f;
+  --text-soft: #6c7880;
+  --text-faint: #85919a;
+  --focus-shadow: 0 0 0 3px rgba(133, 159, 61, 0.18);
+  --accent-bg: #5c732b;
+  --accent-bg-hover: #4c6222;
+  --accent-text: #fff;
+  --panel-line: rgba(83, 105, 43, 0.12);
+  --panel-muted-line: rgba(83, 105, 43, 0.12);
+  --topbar-active-indicator: #859f3d;
+  --records-filter-bg: #f8f9fa;
+  --records-filter-line: #dce2e6;
+  --records-filter-line-hover: #bcc9d1;
+  --records-filter-hover-bg: #edf2f5;
+  --menu-hover-bg: #f0f3f5;
+  --menu-active-bg: #5c732b;
+  --menu-active-text: #fff;
+  --record-card-line: rgba(83, 105, 43, 0.12);
+  --record-file-hover-line: #b8cbd9;
+  --radius-lg: 16px;
+  --shadow-panel: 0 2px 8px rgba(50, 65, 33, 0.035), 0 8px 24px -18px rgba(50, 65, 33, 0.18);
+  --shadow-compose-panel: 0 4px 20px -14px rgba(50, 65, 33, 0.22);
+
+  .app-topbar { box-shadow: 0 1px 8px rgba(50, 65, 33, 0.03); }
+  .app-brand { color: var(--classic-ink); }
+  .app-nav-link.is-active { color: var(--classic-ink); }
+  .app-controls .theme-trigger { color: var(--text-soft); }
+  .workspace-panel { border-top: 3px solid var(--classic-brand); }
+  .composer { padding: 1rem; }
+  .composer-input-row::before { border-color: var(--line); }
+  .composer-textarea { background: var(--surface); }
+  .composer-input-row:focus-within::before { border-color: var(--classic-brand); }
+
+  .composer-toolbar-left { gap: 0.48rem; }
+  .composer-add,
+  .composer-clear {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    border: 1px solid;
+    border-radius: 9px;
+    box-shadow: 0 1px 2px rgba(40, 55, 67, 0.04);
+  }
+  .composer-add {
+    color: var(--classic-blue);
+    background: var(--classic-blue-tint);
+    border-color: #d6e2ec;
+  }
+  .composer-add:hover:not(:disabled),
+  .composer-add:active:not(:disabled) {
+    color: #355874;
+    background: #e2edf5;
+    border-color: #b9cddd;
+    box-shadow: 0 1px 2px rgba(40, 55, 67, 0.06);
+  }
+  .composer-clear {
+    color: var(--classic-warm);
+    background: var(--classic-warm-tint);
+    border-color: #e7dccf;
+  }
+  .composer-clear:hover:not(:disabled),
+  .composer-clear:active:not(:disabled) {
+    color: #76553b;
+    background: #eee3d6;
+    border-color: #d6c3ae;
+    box-shadow: 0 1px 2px rgba(67, 50, 33, 0.06);
+  }
+
+  .composer-send {
+    min-width: 78px;
+    height: 34px;
+    background: var(--accent-bg);
+    border-color: var(--accent-bg);
+    color: var(--accent-text);
+    border-radius: 9px;
+    box-shadow: 0 2px 4px rgba(74, 94, 33, 0.12);
+  }
+  .composer-send:hover:not(:disabled),
+  .composer-send:active:not(:disabled) {
+    background: var(--accent-bg-hover);
+    border-color: var(--accent-bg-hover);
+    color: var(--accent-text);
+  }
+  .progress-value { background: var(--classic-brand); }
+  .records-panel { background: transparent; border: 0; box-shadow: none; }
+  .records-list { padding-inline: 0; }
+  .records-page { display: grid; gap: 0.75rem; }
+  .record-item {
+    background: var(--record-card-bg);
+    border: 1px solid var(--record-card-line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-panel);
+  }
+  .record-item + .record-item {
+    border-top: 1px solid var(--record-card-line);
+    padding-top: 1rem;
+  }
+  .record-device-icon { color: #738594; }
+  .record-device-name { font-size: 0.9rem; font-weight: 600; }
+  .record-body { margin-top: 0.7rem; }
+  .record-message { line-height: 1.7; }
+  .record-message-link,
+  .record-file { color: var(--classic-blue); }
+  .record-file { background: #fbfcfd; border-color: #e0e7ec; }
+  .record-footer { border-top: 1px solid var(--panel-line); padding-top: 0.45rem; }
+  .record-head-action-btn:hover { background: var(--classic-blue-tint); color: var(--classic-blue); }
+  .record-head-action-btn.is-danger:hover { background: #fff0ed; color: #b65d4d; }
+  .records-type-chip.is-active,
+  button.records-type-chip.is-active:hover:not(:disabled) {
+    background: var(--classic-tint);
+    color: var(--classic-ink);
+    box-shadow: inset 0 0 0 1px #dce6c9;
+  }
+  .records-type-segment { border-color: var(--line); }
+  .records-pagination-wrap { border-top: 0; padding-top: 0.9rem; }
+  .theme-trigger:hover { background: var(--classic-tint); }
+
+  @media (max-width: 700px) {
+    --app-side-padding-mobile: 0.8rem;
+    .composer { padding: 0.8rem; }
+    .record-item,
+    .record-item + .record-item { padding: 0.9rem; }
+    .records-page { gap: 0.65rem; }
+  }
+}
